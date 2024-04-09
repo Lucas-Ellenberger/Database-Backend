@@ -1,7 +1,8 @@
+#include<std>
+
 #include "pfm.h"
-
+    
 PagedFileManager* PagedFileManager::_pf_manager = 0;
-
 PagedFileManager* PagedFileManager::instance()
 {
     if(!_pf_manager)
@@ -13,16 +14,19 @@ PagedFileManager* PagedFileManager::instance()
 
 PagedFileManager::PagedFileManager()
 {
+    FILE* file;
 }
 
 
 PagedFileManager::~PagedFileManager()
 {
+    
 }
 
 
 RC PagedFileManager::createFile(const string &fileName)
 {
+    std::
     return -1;
 }
 
