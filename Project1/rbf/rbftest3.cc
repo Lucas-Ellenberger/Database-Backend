@@ -48,7 +48,7 @@ int RBFTest_3(PagedFileManager *pfm)
     cout << "RBF Test Case 3 Finished! The result will be examined." << endl << endl;
 
     return 0;
-}
+}   
 
 int main()
 {
