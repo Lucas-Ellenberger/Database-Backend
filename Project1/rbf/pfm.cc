@@ -126,7 +126,7 @@ FileHandle::~FileHandle()
 RC FileHandle::readPage(PageNum pageNum, void *data)
 {
     //given the page num, modify the memory block at *data to have all the information stored the page pageNum
-    if (pageNum < this->pagecount) {
+    if (this->pagecount <= pageNum) {
         cerr << "page number requested is greater than the number of pages for this file" << endl;
         return -1;
     }
@@ -150,6 +150,7 @@ RC FileHandle::writePage(PageNum pageNum, const void *data)
         return -1;
     }
     if (pageNum == this->pagecount) {
+        this->writePageCounter += 1;
         return appendPage(data);
     }
 
@@ -170,6 +171,7 @@ RC FileHandle::appendPage(const void *data)
     fwrite(data, 1, 4096, this->file); //write the data
 
     this->appendPageCounter += 1;
+    this->pagecount += 1;
     return 0;
 }
 
