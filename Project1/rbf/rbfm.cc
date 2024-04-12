@@ -25,98 +25,79 @@ RecordBasedFileManager::~RecordBasedFileManager()
 
 RC RecordBasedFileManager::createFile(const string &fileName) {
     PagedFileManager *pfm = PagedFileManager::instance();
-    /* if (_pf_manager == 0) { */
-        /* cerr << "createFile: _pf_manager has not been initialized.\n" << endl; */
-        /* return 1; */
-    /* } */
     return pfm->createFile(fileName);
 }
 
 RC RecordBasedFileManager::destroyFile(const string &fileName) {
     PagedFileManager *pfm = PagedFileManager::instance();
-    /* if (_pf_manager == 0) { */
-        /* cerr << "destroyFile: _pf_manager has not been initialized.\n" << endl; */
-        /* return 1; */
-    /* } */
     return pfm->destroyFile(fileName);
 }
 
 RC RecordBasedFileManager::openFile(const string &fileName, FileHandle &fileHandle) {
     PagedFileManager *pfm = PagedFileManager::instance();
-    /* if (_pf_manager == 0) { */
-        /* cerr << "openFile: _pf_manager has not been initialized.\n" << endl; */
-        /* return 1; */
-    /* } */
     return pfm->openFile(fileName, fileHandle);
 }
 
 RC RecordBasedFileManager::closeFile(FileHandle &fileHandle) {
     PagedFileManager *pfm = PagedFileManager::instance();
-    /* if (_pf_manager == 0) { */
-        /* cerr << "closeFile: _pf_manager has not been initialized.\n" << endl; */
-        /* return 1; */
-    /* } */
     return pfm->closeFile(fileHandle);
 }
 
 RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const void *data, RID &rid) {
     /* PagedFileManager *pfm = PagedFileManager::instance(); */
-    /* if (_pf_manager == 0) { */
-        /* cerr << "insertRecord: _pf_manager has not been initialized.\n" << endl; */
-        /* return 1; */
-    /* } */
     /* return _pf_manager.insertRecord(fileHandle, recordDescriptor, data, rid); */
     return -1;
 }
 
 RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const RID &rid, void *data) {
     /* PagedFileManager *pfm = PagedFileManager::instance(); */
-    /* if (_pf_manager == 0) { */
-        /* cerr << "readRecord: _pf_manager has not been initialized.\n" << endl; */
-        /* return 1; */
-    /* } */
     return -1;
 }
 
 RC RecordBasedFileManager::printRecord(const vector<Attribute> &recordDescriptor, const void *data) {
     int nullBytes = ceil((double) recordDescriptor.size() / CHAR_BIT);
     bool nullBit = false;
-    // Initialize a pointer to the first byte of real data, which is after the n NULL bytes.
-    int dataOffset = nullBytes;
+    // Initialize a pointer to the first byte of the NULL bits.
+    char* nullOffset = ((char *) data);
 
-    // Initialize a pointer to the first bit of the NULL bits.
-    const char* nullOffset = (char *) data;
+    // Initialize a pointer to the first field in the record, which is after the NULL bytes..
+    char* fields = ((char *) data);
+    fields += nullBytes;
 
     int byteOffset = 0;
     int bitOffset = 7;
     for (unsigned i = 0; i < recordDescriptor.size(); i++) {
-        cout << recordDescriptor[i].name << ":\t";
+        cout << recordDescriptor[i].name << ": ";
         // Check if the NULL bit is valid.
         nullBit = (nullOffset[byteOffset] & (1 << bitOffset));
         if (!nullBit) {
-            // The field in the record is either an int or float.
+            // The field an int.
             if (recordDescriptor[i].type == 0) {
                 int curr;
-                memcpy(&curr, data[dataOffset], sizeof(recordDescriptor[i].type));
-                dataOffset += recordDescriptor[i].length;
+                memcpy(&curr, fields, recordDescriptor[i].length);
+                fields += recordDescriptor[i].length;
 
                 cout << curr << "\t";
+            // The field is an float.
             } else if (recordDescriptor[i].type == 1){
                 float curr;
-                memcpy(&curr, dataOffset, sizeof(recordDescriptor[i].type));
-                dataOffset += recordDescriptor[i].length;
+                memcpy(&curr, fields, recordDescriptor[i].length);
+                fields += recordDescriptor[i].length;
 
                 cout << curr << "\t";
+            // The field is a varchar.
             } else if (recordDescriptor[i].type == 2) {
                 int length;
-                memcpy(&length, dataOffset, sizeof(int));
-                dataOffset += sizeof(int);
+                memcpy(&length, fields, 4);
+                fields += 4;
 
-                char str[recordDescriptor[i].length];
-                memcpy(&str, dataOffset, recordDescriptor[i].length);
-                dataOffset += recordDescriptor[i].length;
+                char str[length + 1];
+                memcpy(&str, fields, length);
+                // Must add NULL terminating bit to string manually!
+                str[length] = '\0';
+                fields += length;
 
-                cout << str << "\t";
+                cout << std::string(str) << "\t";
             } else {
                 cerr << endl << "printRecord: Invalid record descriptor type." << endl;
                 return 1;
