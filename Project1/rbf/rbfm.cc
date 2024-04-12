@@ -24,55 +24,61 @@ RecordBasedFileManager::~RecordBasedFileManager()
 }
 
 RC RecordBasedFileManager::createFile(const string &fileName) {
-    if (_pf_manager == 0) {
-        cerr << "createFile: _pf_manager has not been initialized.\n" << endl;
-        return 1;
-    }
-    return _pf_manager.createFile(fileName);
+    PagedFileManager *pfm = PagedFileManager::instance();
+    /* if (_pf_manager == 0) { */
+        /* cerr << "createFile: _pf_manager has not been initialized.\n" << endl; */
+        /* return 1; */
+    /* } */
+    return pfm->createFile(fileName);
 }
 
 RC RecordBasedFileManager::destroyFile(const string &fileName) {
-    if (_pf_manager == 0) {
-        cerr << "destroyFile: _pf_manager has not been initialized.\n" << endl;
-        return 1;
-    }
-    return _pf_manager.destroyFile(fileName);
+    PagedFileManager *pfm = PagedFileManager::instance();
+    /* if (_pf_manager == 0) { */
+        /* cerr << "destroyFile: _pf_manager has not been initialized.\n" << endl; */
+        /* return 1; */
+    /* } */
+    return pfm->destroyFile(fileName);
 }
 
 RC RecordBasedFileManager::openFile(const string &fileName, FileHandle &fileHandle) {
-    if (_pf_manager == 0) {
-        cerr << "openFile: _pf_manager has not been initialized.\n" << endl;
-        return 1;
-    }
-    return _pf_manager.openFile(fileName, fileHandle);
+    PagedFileManager *pfm = PagedFileManager::instance();
+    /* if (_pf_manager == 0) { */
+        /* cerr << "openFile: _pf_manager has not been initialized.\n" << endl; */
+        /* return 1; */
+    /* } */
+    return pfm->openFile(fileName, fileHandle);
 }
 
 RC RecordBasedFileManager::closeFile(FileHandle &fileHandle) {
-    if (_pf_manager == 0) {
-        cerr << "closeFile: _pf_manager has not been initialized.\n" << endl;
-        return 1;
-    }
-    return _pf_manager.closeFile(FileHandle);
+    PagedFileManager *pfm = PagedFileManager::instance();
+    /* if (_pf_manager == 0) { */
+        /* cerr << "closeFile: _pf_manager has not been initialized.\n" << endl; */
+        /* return 1; */
+    /* } */
+    return pfm->closeFile(fileHandle);
 }
 
 RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const void *data, RID &rid) {
-    if (_pf_manager == 0) {
-        cerr << "insertRecord: _pf_manager has not been initialized.\n" << endl;
-        return 1;
-    }
-    return _pf_manager.insertRecord(fileHandle, recordDescriptor, data, rid);
+    /* PagedFileManager *pfm = PagedFileManager::instance(); */
+    /* if (_pf_manager == 0) { */
+        /* cerr << "insertRecord: _pf_manager has not been initialized.\n" << endl; */
+        /* return 1; */
+    /* } */
+    /* return _pf_manager.insertRecord(fileHandle, recordDescriptor, data, rid); */
+    return -1;
 }
 
 RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const RID &rid, void *data) {
-    if (_pf_manager == 0) {
-        cerr << "readRecord: _pf_manager has not been initialized.\n" << endl;
-        return 1;
-    }
-    return _pf_manager;
+    /* PagedFileManager *pfm = PagedFileManager::instance(); */
+    /* if (_pf_manager == 0) { */
+        /* cerr << "readRecord: _pf_manager has not been initialized.\n" << endl; */
+        /* return 1; */
+    /* } */
+    return -1;
 }
 
 RC RecordBasedFileManager::printRecord(const vector<Attribute> &recordDescriptor, const void *data) {
-    /* PagedFileManager *pfm = PagedFileManager::instance(); */
     int nullBytes = ceil((double) recordDescriptor.size() / CHAR_BIT);
     bool nullBit = false;
     // Initialize a pointer to the first byte of real data, which is after the n NULL bytes.
