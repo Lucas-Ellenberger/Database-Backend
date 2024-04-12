@@ -1,5 +1,5 @@
 ## For students: change this path to the root of your code if this doesn't work
-CODEROOT = .
+CODEROOT = ..
 
 #CC = gcc
 CC = g++
