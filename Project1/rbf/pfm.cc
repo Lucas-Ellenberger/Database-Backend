@@ -1,5 +1,6 @@
 #include <sys/stat.h>
 #include <iostream>
+#include <cmath>
 
 #include "pfm.h"
 
@@ -21,15 +22,21 @@ PagedFileManager *PagedFileManager::instance()
 
 PagedFileManager::PagedFileManager()
 {
+    // Initialize a header page for the heap file.
+    // Each block in the header page will store the following:
+    // (Pointer to the Data Page, Amount of free space on DP)
+    // The pointer can be the offset.
+    // We will eventually need to have a pointer to the next page in the header page.
 }
 
 PagedFileManager::~PagedFileManager()
 {
+    // Destroy the header page for the heap file.
 }
 
 RC PagedFileManager::createFile(const string &fileName)
 {
-    // Checks if fileName already exists
+    // Check if the fileName already exists.
     struct stat fileAtt;
     if (stat(fileName.c_str(), &fileAtt) == 0)
     {
@@ -43,29 +50,33 @@ RC PagedFileManager::createFile(const string &fileName)
         cerr << "Error in creating file\n";
         return 2;
     }
+
     fclose(file);
     return 0;
 }
 
 RC PagedFileManager::destroyFile(const string &fileName)
 {
-    // Checks if filename exists
+    // Check if the filename exists.
     struct stat fileAtt;
     if (stat(fileName.c_str(), &fileAtt) != 0)
     {
         cerr << "Error obtaining file\n";
         return 1;
     }
+
     if (remove(fileName.c_str()) != 0)
     {
         cerr << "Error in removing file\n";
         return 2;
     }
+
     return 0;
 }
+
 RC PagedFileManager::openFile(const string &fileName, FileHandle &fileHandle)
 {
-    // Check if fileName exists
+    // Check if the fileName exists.
     struct stat fileAtt;
     if (stat(fileName.c_str(), &fileAtt) != 0)
     {
@@ -74,22 +85,29 @@ RC PagedFileManager::openFile(const string &fileName, FileHandle &fileHandle)
             std::cerr << "File does not exist\n";
             return 1;
         }
+
         cerr << "Error Occured\n";
         return 2;
     };
 
-    // Check if given FileHandle Object already has an open file
+    // Check if the given FileHandle Object already has an open file.
     if (fileHandle.file != nullptr)
     {
         std::cerr << "FileHandle object already has an open file\n";
         return 3;
     }
+
     fileHandle.file = fopen(fileName.c_str(), "rb+");
     if (fileHandle.file == NULL)
     {
         std::cerr << "Error in opening file\n";
         return 4;
     }
+
+    // Find the number of pages in the file.
+    fseek(fileHandle.file, 0, SEEK_END);
+    fileHandle.pagecount = ftell(fileHandle.file) >> PAGE_SHIFT;
+
     return 0;
 }
 
@@ -100,6 +118,7 @@ RC PagedFileManager::closeFile(FileHandle &fileHandle)
         cerr << "fileHandle object does not have an open file\n";
         return 1;
     }
+
     fclose(fileHandle.file);
     fileHandle.file = nullptr;
     return 0;
@@ -116,27 +135,26 @@ FileHandle::FileHandle()
 
 FileHandle::~FileHandle()
 {
-    // need to destroy any files held by pointers
+    // User must close any files held by pointers.
     if(this->file != nullptr) {
-        //has file associated with it and file is still open. 
+        // FileHandle has an open file associated with it.
         cerr << "File not closed, cannot remove file handle" << endl;
     }
 }
 
 RC FileHandle::readPage(PageNum pageNum, void *data)
 {
-    //given the page num, modify the memory block at *data to have all the information stored the page pageNum
+    // Write the data from the given page number into *data.
     if (this->pagecount <= pageNum) {
         cerr << "page number requested is greater than the number of pages for this file" << endl;
         return -1;
     }
 
-    //given that any page is 4096 bytes, then we should be able to just say "page 0 starts at byte 0 ends at 4095, page 1 starts at 4096... "
-    unsigned offset = pageNum << 12; //multiply pageNum by 4096 to get to correct page
+    // Every page is 4096 bytes, so we can shift the page number left by 12 bits to access the data.
+    unsigned offset = pageNum << PAGE_SHIFT; // Multiply pageNum by 4096 to get to correct page.
 
-    fseek(this->file, offset, SEEK_SET); // set us to the correct spot in the file for the requested page
-    fread(data, 1, 4096, this->file); //read the data
-
+    fseek(this->file, offset, SEEK_SET); // Set the file pointer to the correct spot in the page.
+    fread(data, 1, PAGE_SIZE, this->file); // Read the data.
 
     this->readPageCounter += 1;
     return 0;
@@ -144,7 +162,7 @@ RC FileHandle::readPage(PageNum pageNum, void *data)
 
 RC FileHandle::writePage(PageNum pageNum, const void *data)
 {
-    //given the page num, modify the page to have all the data pointed to by data
+    // Given the page num, write *data into the page.
     if (pageNum > this->pagecount) {
         cerr << "page number requested is greater than the number of pages for this file" << endl;
         return -1;
@@ -154,10 +172,10 @@ RC FileHandle::writePage(PageNum pageNum, const void *data)
         return appendPage(data);
     }
 
-    unsigned offset = pageNum << 12; //multiply pageNum by 4096 to get to correct page
+    unsigned offset = pageNum << PAGE_SHIFT; // Multiply pageNum by 4096 to get to correct page.
 
-    fseek(this->file, offset, SEEK_SET); // set us to the correct spot in the file for the requested page
-    fwrite(data, 1, 4096, this->file); //write the data
+    fseek(this->file, offset, SEEK_SET); // Set the file pointer to the correct spot in the file.
+    fwrite(data, 1, PAGE_SIZE, this->file); // Write the data.
 
     this->writePageCounter += 1;
     return 0;
@@ -165,10 +183,10 @@ RC FileHandle::writePage(PageNum pageNum, const void *data)
 
 RC FileHandle::appendPage(const void *data)
 {
-    unsigned offset = this->pagecount << 12; //multiply number of pages by 4096 to get to correct page
+    unsigned offset = this->pagecount << PAGE_SHIFT; // Multiply number of pages by 4096 to get to correct page.
 
-    fseek(this->file, offset, SEEK_SET); // set us to the correct spot in the file for the requested page
-    fwrite(data, 1, 4096, this->file); //write the data
+    fseek(this->file, offset, SEEK_SET); // Set the file pointer to the correct spot in the file.
+    fwrite(data, 1, PAGE_SIZE, this->file); // Write the data.
 
     this->appendPageCounter += 1;
     this->pagecount += 1;
