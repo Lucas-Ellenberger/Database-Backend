@@ -1,5 +1,6 @@
 #include <sys/stat.h>
 #include <iostream>
+#include <cmath>
 
 #include "pfm.h"
 
@@ -72,6 +73,7 @@ RC PagedFileManager::destroyFile(const string &fileName)
 
     return 0;
 }
+
 RC PagedFileManager::openFile(const string &fileName, FileHandle &fileHandle)
 {
     // Check if the fileName exists.
@@ -101,6 +103,10 @@ RC PagedFileManager::openFile(const string &fileName, FileHandle &fileHandle)
         std::cerr << "Error in opening file\n";
         return 4;
     }
+
+    // Find the number of pages in the file.
+    fseek(fileHandle.file, 0, SEEK_END);
+    fileHandle.pagecount = ftell(fileHandle.file) >> PAGE_SHIFT;
 
     return 0;
 }
@@ -145,10 +151,10 @@ RC FileHandle::readPage(PageNum pageNum, void *data)
     }
 
     // Every page is 4096 bytes, so we can shift the page number left by 12 bits to access the data.
-    unsigned offset = pageNum << 12; // Multiply pageNum by 4096 to get to correct page.
+    unsigned offset = pageNum << PAGE_SHIFT; // Multiply pageNum by 4096 to get to correct page.
 
     fseek(this->file, offset, SEEK_SET); // Set the file pointer to the correct spot in the page.
-    fread(data, 1, 4096, this->file); // Read the data.
+    fread(data, 1, PAGE_SIZE, this->file); // Read the data.
 
     this->readPageCounter += 1;
     return 0;
@@ -166,10 +172,10 @@ RC FileHandle::writePage(PageNum pageNum, const void *data)
         return appendPage(data);
     }
 
-    unsigned offset = pageNum << 12; // Multiply pageNum by 4096 to get to correct page.
+    unsigned offset = pageNum << PAGE_SHIFT; // Multiply pageNum by 4096 to get to correct page.
 
     fseek(this->file, offset, SEEK_SET); // Set the file pointer to the correct spot in the file.
-    fwrite(data, 1, 4096, this->file); // Write the data.
+    fwrite(data, 1, PAGE_SIZE, this->file); // Write the data.
 
     this->writePageCounter += 1;
     return 0;
@@ -177,10 +183,10 @@ RC FileHandle::writePage(PageNum pageNum, const void *data)
 
 RC FileHandle::appendPage(const void *data)
 {
-    unsigned offset = this->pagecount << 12; // Multiply number of pages by 4096 to get to correct page.
+    unsigned offset = this->pagecount << PAGE_SHIFT; // Multiply number of pages by 4096 to get to correct page.
 
     fseek(this->file, offset, SEEK_SET); // Set the file pointer to the correct spot in the file.
-    fwrite(data, 1, 4096, this->file); // Write the data.
+    fwrite(data, 1, PAGE_SIZE, this->file); // Write the data.
 
     this->appendPageCounter += 1;
     this->pagecount += 1;

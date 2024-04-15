@@ -6,6 +6,7 @@ typedef int RC;
 typedef char byte;
 
 #define PAGE_SIZE 4096
+#define PAGE_SHIFT 12
 #include <string>
 #include <climits>
 using namespace std;
