@@ -94,8 +94,8 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
             memcpy((char *)pageData + directoryEntryOffset, &recordBytes, 2);
 
             //must add in editing RID here
-            RID->pageNum = i;
-            RID->slotNum = numSlots
+            rid.pageNum = i;
+            rid.slotNum = numSlots
 
             numSlots++;
             // Copy in the new number of records.
@@ -127,8 +127,8 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
 
         fileHandle.appendPage(pageData);
         //add RID here
-        RID->pageNum = numPages;
-        RID->slotNum = 0;
+        rid.pageNum = numPages;
+        rid.slotNum = 0;
 
     }
 
@@ -141,8 +141,8 @@ RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const vector<Attri
     /* PagedFileManager *pfm = PagedFileManager::instance(); */
     
 
-    unsigned pageNum = rid->pageNum;
-    unsigned slotNum = rid->slotNum;
+    unsigned pageNum = rid.pageNum;
+    unsigned slotNum = rid.slotNum;
 
     void* pageData = malloc(PAGE_SIZE);
     fileHandle.readPage(pageNum, pageData);
