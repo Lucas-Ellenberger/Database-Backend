@@ -51,6 +51,7 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
     char* nullOffset = ((char *) data);
 
     short recordBytes = nullBytes;
+    cerr << "insertRecord: Found: " << recordBytes << " null bytes." << endl;
 
     int byteOffset = 0;
     int bitOffset = 7;
@@ -61,13 +62,20 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
             // The field an int.
             if (recordDescriptor[i].type == 0) {
                 recordBytes += recordDescriptor[i].length;
+                cerr << "Found an int so our new length is: " << recordBytes << endl;
             // The field is an float.
             } else if (recordDescriptor[i].type == 1){
                 recordBytes += recordDescriptor[i].length;
+                cerr << "Found a float so our new length is: " << recordBytes << endl;
             // The field is a varchar.
             } else if (recordDescriptor[i].type == 2) {
                 recordBytes += 4;
-                recordBytes += recordDescriptor[i].length;
+                cerr << "strlen() found this length: " << strlen((char *)data + recordBytes) << endl;
+                short strLength = strlen((char *)data + recordBytes);
+                // We ignore the null byte in the string.
+                recordBytes += strLength - 1;
+
+                cerr << "Found a var char so our new length is: " << recordBytes << endl;
             } else {
                 cerr << endl << "insertRecord: Invalid record descriptor type." << endl;
                 return 1;
@@ -80,20 +88,6 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
             byteOffset++;
         }
     }
-    /* for (unsigned i = 0; i < recordDescriptor.size(); i++) { */
-    /*     // Record field is an int or a float. */
-    /*     if (recordDescriptor[i].type == 0 || recordDescriptor[i].type == 1) { */ 
-    /*         recordBytes += recordDescriptor[i].length; */
-    /*     // Record field is a varchar. */
-    /*     } else if (recordDescriptor[i].type == 2) { */ 
-    /*         // We must add 4 bytes for the length of the varchar and the size of the varchar. */
-    /*         recordBytes += 4; */
-    /*         recordBytes += recordDescriptor[i].length; */
-    /*     } else { */
-    /*         cerr << "insertRecord: Invalid recordDescriptor type." << endl; */
-    /*     } */
-    /* } */
-
     cerr << "insertRecord: We need: " << recordBytes << " bytes." << endl;
 
     // We need 4 bytes for the directory entry.
@@ -104,6 +98,7 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
         cerr << "insertRecord: Unable to allocate memory." << endl;
         return -1;
     }
+
     memset(pageData, 0, PAGE_SIZE);
     short freeSpaceOffset = 0;
     short numSlots = 0;
@@ -164,11 +159,13 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
 
     if (mustAppend) {
         memset(pageData, 0, PAGE_SIZE);
+        fileHandle.appendPage(pageData);
         freeSpaceOffset = PAGE_SIZE - recordBytes;
         cerr << "insertRecord: record size: " << recordBytes << "\tfreeSpaceOffset: " << freeSpaceOffset << endl;
         // Copy in the record.
         if (PAGE_SIZE - freeSpaceOffset >= recordBytes) {
             memcpy(&pageData[freeSpaceOffset], data, recordBytes);
+            fileHandle.appendPage(pageData);
         } else {
             cerr << "insertRecord: Record too large." << endl;
         }
@@ -177,15 +174,19 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
         if (freeSpaceOffset >= 8) {
             // Copy in the pointer to free space.
             memcpy(&pageData[0], &freeSpaceOffset, 2);
+            fileHandle.appendPage(pageData);
             numSlots = 1;
             // Copy in the number of records.
             memcpy(&pageData[2], &numSlots, 2);
+            fileHandle.appendPage(pageData);
             // Store the offset of the record.
             memcpy(&pageData[4], &freeSpaceOffset, 2);
+            fileHandle.appendPage(pageData);
             /* directoryEntryOffset += 2; */
             // Store the length of the record.
             cerr << "insertRecord: recordBytes: " << recordBytes << endl;
             memcpy(&pageData[6], &recordBytes, 2);
+            fileHandle.appendPage(pageData);
         }
 
         fileHandle.appendPage(pageData);
@@ -261,7 +262,7 @@ RC RecordBasedFileManager::printRecord(const vector<Attribute> &recordDescriptor
                 cout << curr << "\t";
             // The field is a varchar.
             } else if (recordDescriptor[i].type == 2) {
-                int length = 0;
+                short length = 0;
                 memcpy(&length, fields, 4);
                 fields += 4;
 
