@@ -1,5 +1,6 @@
 #include <sys/stat.h>
 #include <iostream>
+#include <filesystem>
 #include <cmath>
 
 #include "pfm.h"
@@ -22,16 +23,10 @@ PagedFileManager *PagedFileManager::instance()
 
 PagedFileManager::PagedFileManager()
 {
-    // Initialize a header page for the heap file.
-    // Each block in the header page will store the following:
-    // (Pointer to the Data Page, Amount of free space on DP)
-    // The pointer can be the offset.
-    // We will eventually need to have a pointer to the next page in the header page.
 }
 
 PagedFileManager::~PagedFileManager()
 {
-    // Destroy the header page for the heap file.
 }
 
 RC PagedFileManager::createFile(const string &fileName)
@@ -183,13 +178,14 @@ RC FileHandle::writePage(PageNum pageNum, const void *data)
 
 RC FileHandle::appendPage(const void *data)
 {
-    unsigned offset = this->pagecount << PAGE_SHIFT; // Multiply number of pages by 4096 to get to correct page.
+    /* unsigned offset = this->pagecount << PAGE_SHIFT; // Multiply number of pages by 4096 to get to correct page. */
 
-    fseek(this->file, offset, SEEK_SET); // Set the file pointer to the correct spot in the file.
+    fseek(this->file, 0, SEEK_END); // Set the file pointer to the correct spot in the file.
+    this->pagecount += 1;
+    /* std::filesystem::resize_file(this->file, this->pagecount * 4096); */
     fwrite(data, 1, PAGE_SIZE, this->file); // Write the data.
 
     this->appendPageCounter += 1;
-    this->pagecount += 1;
     return 0;
 }
 

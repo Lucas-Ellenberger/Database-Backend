@@ -44,12 +44,15 @@ RC RecordBasedFileManager::closeFile(FileHandle &fileHandle) {
 }
 
 RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const void *data, RID &rid) {
-    //how big is the record?
+    // Determine the record size.
     short recordBytes = 0;
     for (unsigned i = 0; i < recordDescriptor.size(); i++) {
-        if (recordDescriptor[i].type == 0 || recordDescriptor[i].type == 1) { //if attribute type is TypeInt or TypeReal, we can use the length outright
+        // Record field is an int or a float.
+        if (recordDescriptor[i].type == 0 || recordDescriptor[i].type == 1) { 
             recordBytes += recordDescriptor[i].length;
-        } else if (recordDescriptor[i].type == 2) { // else if the length is typeVarChar, then we have to have an extra 4 bytes to store nameLength (an int) plus the actual size of the name, which is variable
+        // Record field is a varchar.
+        } else if (recordDescriptor[i].type == 2) { 
+            // We must add 4 bytes for the length of the varchar and the size of the varchar.
             recordBytes += 4;
             recordBytes += recordDescriptor[i].length;
         } else {
@@ -64,27 +67,26 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
     short freeSpaceOffset = 0;
     short numSlots = 0;
     short directoryEntryOffset = 0;
-    unsigned bytesAvailable = 0;
+    short bytesAvailable = 0;
     bool mustAppend = true;
     unsigned numPages = fileHandle.getNumberOfPages();
     for (unsigned i = 0; i < numPages; i++) {
         fileHandle.readPage(i, pageData);
-        memcpy(&freeSpaceOffset, pageData, 2); // let the first two bytes of the page indicate how much free space exists on the page
-        memcpy(&numSlots, (char *)pageData + 2, 2); // then with an offset of two, count the next two bytes (2, 3) to get the number of slots in the page
-        // Calculate the number of available bytes..
-        // The freeSpaceOffset and numSlots take 4 bytes of the page.
+        // The first two bytes indicate the offset to the end of free space in the file.
+        memcpy(&freeSpaceOffset, pageData, 2);
+        // The next two bytes indicate the number of slots in the page.
+        memcpy(&numSlots, (char *)pageData + 2, 2);
+        // Calculate the number of available bytes.
+        // The freeSpaceOffset and numSlots each take 2 bytes of the page, for a total of 4 bytes.
         // Each directory entry takes 4 bytes to store, so it takes (numSlots * 4) bytes to store the entries of the directory.
-        bytesAvailable = freeSpaceOffset - (numSlots * 4) - 4; //subtract out 4 to get how much space we will have to 
-                                                              //ensure no collision between new directory entry for this new record and the data of the record itself
+        bytesAvailable = freeSpaceOffset - (numSlots * 4) - 4;
         if (totalBytesNeeded <= bytesAvailable) {
             // Insert record starting at freeSpaceOffset - recordBytes.
             freeSpaceOffset -= recordBytes;
             // Copy in the record.
             memcpy((char *)pageData + freeSpaceOffset, data, recordBytes);
-
             // Copy in the pointer to free space.
             memcpy((char *)pageData, &freeSpaceOffset, 2);
-
             // We need 4 bytes per entry and 4 bytes for the directory header. where directory header is just telling us free space offset and numSlots
             directoryEntryOffset = (numSlots * 4) + 4;
             // Store the offset of the record.
@@ -93,16 +95,15 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
             // Store the length of the record.
             memcpy((char *)pageData + directoryEntryOffset, &recordBytes, 2);
 
-            //must add in editing RID here
-            RID->pageNum = i;
-            RID->slotNum = numSlots
+            // Update the rid.
+            rid.pageNum = i;
+            rid.slotNum = numSlots;
 
             numSlots++;
             // Copy in the new number of records.
-            memcpy((char *)pageData + 2, &numSlots, 2); //I think &numSlots is the only way to do this, but this may cause memory issues later
+            // I think &numSlots is the only way to do this, but this may cause memory issues later.
+            memcpy((char *)pageData + 2, &numSlots, 2);
             mustAppend = false;
-
-            
 
             break;
         }
@@ -126,10 +127,10 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
         memcpy((char *)pageData + 2, &numSlots, 2);
 
         fileHandle.appendPage(pageData);
-        //add RID here
-        RID->pageNum = numPages;
-        RID->slotNum = 0;
 
+        // Update the rid.
+        rid.pageNum = numPages;
+        rid.slotNum = 0;
     }
 
     free(pageData);
@@ -138,11 +139,8 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
 }
 
 RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const RID &rid, void *data) {
-    /* PagedFileManager *pfm = PagedFileManager::instance(); */
-    return -1;
-
-    unsigned pageNum = rid->pageNum;
-    unsigned slotNum = rid->slotNum;
+    unsigned pageNum = rid.pageNum;
+    unsigned slotNum = rid.slotNum;
 
     void* pageData = malloc(PAGE_SIZE);
     fileHandle.readPage(pageNum, pageData);
@@ -194,21 +192,21 @@ RC RecordBasedFileManager::printRecord(const vector<Attribute> &recordDescriptor
         if (!nullBit) {
             // The field an int.
             if (recordDescriptor[i].type == 0) {
-                int curr;
+                int curr = 0;
                 memcpy(&curr, fields, recordDescriptor[i].length);
                 fields += recordDescriptor[i].length;
 
                 cout << curr << "\t";
             // The field is an float.
             } else if (recordDescriptor[i].type == 1){
-                float curr;
+                float curr = 0;
                 memcpy(&curr, fields, recordDescriptor[i].length);
                 fields += recordDescriptor[i].length;
 
                 cout << curr << "\t";
             // The field is a varchar.
             } else if (recordDescriptor[i].type == 2) {
-                int length;
+                int length = 0;
                 memcpy(&length, fields, 4);
                 fields += 4;
 
