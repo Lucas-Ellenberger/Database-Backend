@@ -145,32 +145,24 @@ RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const vector<Attri
     void* pageData = malloc(PAGE_SIZE);
     fileHandle.readPage(pageNum, pageData);
 
-    // first check if the slotNum is valid
+    // Check if the slotNum is valid.
     unsigned totalSlotsUsed = 0;
     
     memcpy(&totalSlotsUsed, ((char*)pageData) + 2, 2);
     if (slotNum < totalSlotsUsed) {
         short recordOffset = 0;
         short recordSize = 0;
-        memcpy(&recordOffset, (char*)pageData + ((slotNum*4)+4), 2); //add 4 bytes for the totalSlotNum and freeSpaceOffset, multiply by 4 to get to start of directory entry
+        // Add 4 bytes for the totalSlotNum and freeSpaceOffset, multiply by 4 to get to start of directory entry.
+        memcpy(&recordOffset, (char*)pageData + ((slotNum*4)+4), 2);
         memcpy(&recordSize, (char*)pageData + ((slotNum*4)+4), 2);
-
         memcpy(data, (char*)pageData + recordOffset, recordSize);
-
-    }
-    else {
+    } else {
         cerr << "slot number is not in use or otherwise invalid" << endl;
         return -1;
     }
+
     free(pageData);
     return 0;
-
-    //in the directory, the first
-    // 2bytes: free space offset
-    // next 2 bytes is numSlots that have been used
-    // then in each of the 4 subsequent bytes, the first 2 are the offset of the record, the next 2 are the number of bytes the record is. 
-
-
 }
 
 RC RecordBasedFileManager::printRecord(const vector<Attribute> &recordDescriptor, const void *data) {
