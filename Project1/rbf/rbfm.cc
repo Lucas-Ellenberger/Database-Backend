@@ -205,21 +205,27 @@ RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const vector<Attri
     unsigned pageNum = rid.pageNum;
     unsigned slotNum = rid.slotNum;
 
-    void* pageData = malloc(PAGE_SIZE);
-    fileHandle.readPage(pageNum, pageData);
+    char* pageData = (char *)malloc(PAGE_SIZE);
+    RC retValue = fileHandle.readPage(pageNum, pageData);
+    if (retValue != 0) {
+        cerr << "readRecord: Unable to read page." << endl;
+        return -1;
+    }
 
     // Check if the slotNum is valid.
     unsigned totalSlotsUsed = 0;
     
-    memcpy(&totalSlotsUsed, ((char*)pageData) + 2, 2);
-    if (slotNum < totalSlotsUsed) {
+    memcpy(&totalSlotsUsed, &pageData[2], 2);
+    cerr << "Our DP believes: " << totalSlotsUsed << " are in use." << endl;
+    cerr << "The RID is asking for slot: " << slotNum << endl;
+    if (slotNum <= totalSlotsUsed) {
         short recordOffset = 0;
         short recordSize = 0;
         // Add 4 bytes for the totalSlotNum and freeSpaceOffset, multiply by 4 to get to start of directory entry.
-        memcpy(&recordOffset, (char*)pageData + ((slotNum*4)+4), 2);
+        memcpy(&recordOffset, &pageData[((slotNum*4)+4)], 2);
         cerr << "readRecord: found a record offset of: " << recordOffset << endl;
-        memcpy(&recordSize, (char*)pageData + ((slotNum*4)+4), 2);
-        memcpy(data, (char*)pageData + recordOffset, recordSize);
+        memcpy(&recordSize, &pageData[((slotNum*4)+4)], 2);
+        memcpy(data, &pageData[recordOffset], recordSize);
     } else {
         cerr << "slot number is not in use or otherwise invalid" << endl;
         return -1;
