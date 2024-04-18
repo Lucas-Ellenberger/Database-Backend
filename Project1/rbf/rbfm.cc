@@ -139,7 +139,7 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
 
 RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const RID &rid, void *data) {
     /* PagedFileManager *pfm = PagedFileManager::instance(); */
-    return -1;
+    
 
     unsigned pageNum = rid->pageNum;
     unsigned slotNum = rid->slotNum;
