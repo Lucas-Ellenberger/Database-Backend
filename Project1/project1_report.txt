@@ -1,21 +1,91 @@
 1. Basic information
-Team Number:
+Team Number: 42
 CruzID of Submitter: 
 Student Name of Submitter: 
-Names of the other Team Members:
+Names of the other Team Members: 
 
 
 2. Internal Record Format
 - Describe your record format design, and explain how your design provide O(1) field access. If your design does not provide O(1) field access, just mention that you haven't implemented this feature.
+    
+        The internal formatting of our record stores the record in the same format which 
+    was given. 
+
+        The first part of the record stores n bytes which can be determined by
+    the formula: ceil(number of fields in a record / 8). For each bit within a
+    byte, correspondes to a field in the record, with 1 indicating the field to
+    be null and a 0 to be non-null.
+
+        Following the null field indicators, data belonging to the fields are
+    stored sequentially. Any fields that have indicated as null from the previous
+    segment are disregarded here. For each field, fixed length fields such as
+    integers and floats are stored directly but variable length fields like VARCHARs
+    prefix the length of the field beforehand.
+    
+        Our current design does not provide O(1) field access of a given record. Fields are
+    accessed sequentially from the start of the record.
+
 - Describe how you store a VARCHAR field.
 
+        VARCHAR fields are prefixed with the length of the field beforehand. This us to 
+    know the length of a variable field.
 
 3. Page Format
 - Describe your page format design.
 
+        The page format design within our project is based off a slot based management
+    system similar to the one discussed within lecture. Each page consists of 1024 bytes
+    and contains a mini directory providing metadata for each record kept on the page.
+    The mini directory contains a header which stores the offset of free space inside
+    the page and the number of n slots belonging to a record. Each slot contains the
+    starting position, as well as the length of a given record. For our design, we
+    chose to position the minidirectory at the start of the page, with our records being
+    inserted from back-to-front. We had primarily done this to reduce complexity of future
+    record operations such as delete and update.
 
 4. Implementation Detail
 - Be sure to supply additional pertinent implementation detail here.  You may lose credit if this section of the report is empty.
+
+    PFM Class:
+        The PagedFileManager class in our code is implemented as a Singleton
+        to ensure consistent management of file operations, such as creating, destroying,
+        opening, and closing files. PFM uses standard C++ file I/O functions such as fopen,
+        fclose, fread, fwrite, and fseek to directly interact with the operating system’s
+        file system.
+
+    FileHandle Class:
+        This FileHandle class encapsulates metadata about open files, including the count of
+        pages within the file and the number of operations performed on each file such as reads,
+        writes, and appends. Each FileHandle instance is associated with a specific file
+        and maintains a direct pointer to it, ensuring all file interactions are centralized
+        (Multiple FileHandle instances can open the same file). The class provides methods
+        for reading and writing to specific pages, appending new pages, and retrieving the
+        current page count, all of which are fundamental for higher level database operations. 
+
+
+    RecordBasedFileManager Class:
+        This class manages record-based operations within pages in a file. RBFM utilizes an
+        approach where each record is managed through a detailed descriptor that includes
+        the type and size of each field, accommodating data types such as integers, floats,
+        and variable-length strings (VARCHAR).
+    
+        insertRecord:
+            This function first calculates the total size needed for the record, including any
+            necessary space for handling VARCHAR fields. It then iterates through the pages of
+            the file to find a suitable spot based on available space. If enough space is found,
+            it inserts the record and updates the page's directory entries. If no suitable
+            space is found in existing pages, it appends a new page.
+
+        readRecord:
+            It fetches the page specified in the RID, then locates the record within that page
+            using the offset provided in the page's mini-directory. The record's data is then
+            copied into the provided buffer.
+
+        printRecord:
+            It begins by reading the null-indicator bits to determine the presence of NULL
+            fields. For non-null fields, it reads the data according to the field type (int,
+            float, VARCHAR) and prints them. For VARCHAR fields, it also reads the length
+            prefix to handle the variable size.
 
 
 5. Other (optional)
