@@ -51,7 +51,7 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
     char* nullOffset = ((char *) data);
 
     short recordBytes = nullBytes;
-    cerr << "insertRecord: Found: " << recordBytes << " null bytes." << endl;
+    /* cerr << "insertRecord: Found: " << recordBytes << " null bytes." << endl; */
 
     int byteOffset = 0;
     int bitOffset = 7;
@@ -62,19 +62,15 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
             // The field an int.
             if (recordDescriptor[i].type == 0) {
                 recordBytes += recordDescriptor[i].length;
-                cerr << "Found an int so our new length is: " << recordBytes << endl;
             // The field is an float.
             } else if (recordDescriptor[i].type == 1){
                 recordBytes += recordDescriptor[i].length;
-                cerr << "Found a float so our new length is: " << recordBytes << endl;
             // The field is a varchar.
             } else if (recordDescriptor[i].type == 2) {
                 short length = 0;
                 memcpy(&length, (char *)data + recordBytes, sizeof(int));
                 recordBytes += sizeof(int);
-                cerr << "First 4 bytes found this length: " << length << endl;
                 recordBytes += length;
-                cerr << "Found a var char so our new length is: " << recordBytes << endl;
             } else {
                 cerr << endl << "insertRecord: Invalid record descriptor type." << endl;
                 return 1;
@@ -87,7 +83,6 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
             byteOffset++;
         }
     }
-    cerr << "insertRecord: We need: " << recordBytes << " bytes." << endl;
 
     // We need 4 bytes for the directory entry.
     short totalBytesNeeded = (2 * sizeof(short)) + recordBytes;
@@ -163,39 +158,35 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
     /* } */
 
     if (mustAppend) {
-        memset(pageData, -1, PAGE_SIZE);
-        fileHandle.appendPage(pageData);
+        memset(pageData, 0, PAGE_SIZE);
         freeSpaceOffset = PAGE_SIZE - recordBytes - 1;
-        cerr << "insertRecord: record size: " << recordBytes << "\tfreeSpaceOffset: " << freeSpaceOffset << endl;
         // Copy in the record.
         if (PAGE_SIZE - freeSpaceOffset >= recordBytes) {
             memcpy(&pageData[freeSpaceOffset], data, recordBytes);
         } else {
             cerr << "insertRecord: Record too large." << endl;
+            free(pageData);
+            return -6;
         }
 
-        cerr << "insertRecord: data: " << data << endl;
-        /* directoryEntryOffset = 4; */
         if (freeSpaceOffset >= (4 * sizeof(short))) {
             // Copy in the pointer to free space.
             directoryEntryOffset = 0;
-            cerr << "Size of short: " << sizeof(short) << endl;
             memcpy(&pageData[directoryEntryOffset], &freeSpaceOffset, sizeof(short));
-            cerr << "insertRecord: free space offset: " << freeSpaceOffset << endl;
             directoryEntryOffset += sizeof(short);
             numSlots = 1;
             // Copy in the number of records.
             memcpy(&pageData[directoryEntryOffset], &numSlots, sizeof(short));
-            cerr << "insertRecord: numslots: " << numSlots << endl;
+            /* cerr << "insertRecord: numslots: " << numSlots << endl; */
             directoryEntryOffset += sizeof(short);
             // Store the offset of the record.
             memcpy(&pageData[directoryEntryOffset], &freeSpaceOffset, sizeof(short));
             directoryEntryOffset += sizeof(short);
             // Store the length of the record.
-            cerr << "insertRecord: recordBytes: " << recordBytes << endl;
             memcpy(&pageData[directoryEntryOffset], &recordBytes, sizeof(short));
         } else {
             cerr << "insertRecord: Error updating page directory." << endl;
+            free(pageData);
             return -3;
         }
 
@@ -216,7 +207,7 @@ RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const vector<Attri
     unsigned slotNum = rid.slotNum;
 
     char* pageData = (char *)malloc(PAGE_SIZE);
-    memset(pageData, -1, PAGE_SIZE);
+    memset(pageData, 0, PAGE_SIZE);
     RC retValue = fileHandle.readPage(pageNum, pageData);
     if (retValue != 0) {
         cerr << "readRecord: Unable to read page." << endl;
@@ -228,8 +219,8 @@ RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const vector<Attri
     short totalSlotsUsed = 0;
     
     memcpy(&totalSlotsUsed, &pageData[sizeof(short)], sizeof(short));
-    cerr << "Our DP believes: " << totalSlotsUsed << " are in use." << endl;
-    cerr << "The RID is asking for slot: " << slotNum << endl;
+    /* cerr << "Our DP believes: " << totalSlotsUsed << " are in use." << endl; */
+    /* cerr << "The RID is asking for slot: " << slotNum << endl; */
     if (slotNum <= totalSlotsUsed) {
         short recordOffset = 0;
         short recordSize = 0;
@@ -237,11 +228,9 @@ RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const vector<Attri
 
         memcpy(&recordOffset, &pageData[pageDataOffset], sizeof(short));
         pageDataOffset += sizeof(short);
-        cerr << "readRecord: found a record offset of: " << recordOffset << endl;
         memcpy(&recordSize, &pageData[pageDataOffset], sizeof(short));
         memcpy(data, &pageData[recordOffset], recordSize);
     } else {
-        cerr << "readRecord: Invlaid slot number." << endl;
         free(pageData);
         return -1;
     }
@@ -308,6 +297,8 @@ RC RecordBasedFileManager::printRecord(const vector<Attribute> &recordDescriptor
             byteOffset++;
         }
     }
+
     cout << endl;
+
     return 0;
 }
