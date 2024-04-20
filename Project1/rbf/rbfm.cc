@@ -107,6 +107,7 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
     bool mustAppend = true;
     unsigned numPages = fileHandle.getNumberOfPages();
     for (unsigned i = 0; (i < numPages) && mustAppend; i++) {
+        directoryEntryOffset = 0;
         fileHandle.readPage(i, pageData);
         // The first two bytes indicate the offset to the end of free space in the file.
         memcpy(&freeSpaceOffset, &pageData[directoryEntryOffset], sizeof(short));
@@ -120,7 +121,7 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
         bytesAvailable = freeSpaceOffset - (numSlots * 2 * sizeof(short)) - (2 * sizeof(short));
         if (totalBytesNeeded <= bytesAvailable) {
             // Insert record starting at freeSpaceOffset - recordBytes.
-            short destinationOffset = freeSpaceOffset - recordBytes;
+            short destinationOffset = freeSpaceOffset - recordBytes - 1;
             /* cerr << "insertRecord: record size: " << recordBytes << "\tfreeSpaceOffset: " << freeSpaceOffset << endl; */
             if (freeSpaceOffset - destinationOffset >= recordBytes) {
                 // Copy in the record.
@@ -131,11 +132,12 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
             }
             // Copy in the pointer to new end of free space.
             memcpy(&pageData[0], &destinationOffset, sizeof(short));
+            // Update the total number of slots.
             // We need 4 bytes per entry and 4 bytes for the directory header.
             directoryEntryOffset = (numSlots * 2 * sizeof(short)) + (2 * sizeof(short));
             // Store the offset of the record.
             if (destinationOffset - directoryEntryOffset >= (2 * sizeof(short))) {
-                memcpy(&pageData[directoryEntryOffset], &freeSpaceOffset, sizeof(short));
+                memcpy(&pageData[directoryEntryOffset], &destinationOffset, sizeof(short));
                 directoryEntryOffset += sizeof(short);
                 // Store the length of the record.
                 memcpy(&pageData[directoryEntryOffset], &recordBytes, sizeof(short));
@@ -145,6 +147,10 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
                 return -1;
             }
             numSlots++;
+            memcpy(&pageData[sizeof(short)], &numSlots, sizeof(short));
+            if ((numSlots == 2) && (i == 0)) {
+                cerr << "Found a new RID of 0, 2." << endl;
+            }
 
             // Update the rid.
             rid.pageNum = i;
@@ -153,6 +159,11 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
             // Copy in the new number of records.
             // I think &numSlots is the only way to do this, but this may cause memory issues later.
             memcpy(&pageData[sizeof(short)], &numSlots, sizeof(short));
+            RC retValue = fileHandle.writePage(i, pageData);
+            if (retValue != 0) {
+                cerr << "insertRecord: Unable to write page to page number: " << i << endl;
+                return -4;
+            }
             mustAppend = false;
 
             break;
