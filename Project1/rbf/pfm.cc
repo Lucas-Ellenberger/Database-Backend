@@ -158,14 +158,11 @@ RC FileHandle::readPage(PageNum pageNum, void *data)
 RC FileHandle::writePage(PageNum pageNum, const void *data)
 {
     // Given the page num, write *data into the page.
-    if (pageNum > this->pagecount) {
+    if (pageNum >= this->pagecount) {
         cerr << "page number requested is greater than the number of pages for this file" << endl;
         return -1;
     }
-    if (pageNum == this->pagecount) {
-        this->writePageCounter += 1;
-        return appendPage(data);
-    }
+    
 
     unsigned offset = pageNum << PAGE_SHIFT; // Multiply pageNum by 4096 to get to correct page.
 
