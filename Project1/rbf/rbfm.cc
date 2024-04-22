@@ -57,6 +57,8 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
     //these will hold values of any field i from the range [start, end)
     short* field_end = (short *)calloc(recordDescriptor.size(), sizeof(short));
     short* field_start = (short *)calloc(recordDescriptor.size(), sizeof(short));
+    memset(field_start, 0, num_bytes_array);
+    memset(field_end, 0, num_bytes_array);
     // the size of any field will be calculated as field_end[i] - field_start[i]
 
     int byteOffset = 0;
@@ -202,6 +204,7 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
             RC retValue = fileHandle.writePage(i, pageData);
             if (retValue != 0) {
                 cerr << "insertRecord: Unable to write page to page number: " << i << endl;
+                free(pageData);
                 return -4;
             }
             mustAppend = false;
