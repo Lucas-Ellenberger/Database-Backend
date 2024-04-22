@@ -71,8 +71,8 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
             if (recordDescriptor[i].type == 0) {
                 recordBytes += recordDescriptor[i].length;
                 if (i == 0) {
-                    field_start[i] = 0;
-                    field_end[i] = recordDescriptor[i].length;
+                    field_start[i] = nullBytes + num_bytes_array;
+                    field_end[i] = nullBytes + num_bytes_array + recordDescriptor[i].length;
                 }
                 else {
                     field_start[i] = field_end[i-1];
@@ -83,8 +83,8 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
             } else if (recordDescriptor[i].type == 1){
                 recordBytes += recordDescriptor[i].length;
                 if (i == 0) {
-                    field_start[i] = 0;
-                    field_end[i] = recordDescriptor[i].length;
+                    field_start[i] = nullBytes + num_bytes_array;
+                    field_end[i] = nullBytes + num_bytes_array + recordDescriptor[i].length;
                 }
                 else {
                     field_start[i] = field_end[i-1];
@@ -97,8 +97,8 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
                 recordBytes += sizeof(int);
                 recordBytes += length;
                 if (i == 0) {
-                    field_start[i] = 0;
-                    field_end[i] = length + sizeof(int);
+                    field_start[i] = nullBytes + num_bytes_array;
+                    field_end[i] = nullBytes + num_bytes_array + length + sizeof(int);
                 }
                 else {
                     field_start[i] = field_end[i-1];
@@ -161,7 +161,7 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
                 // Copy in the NULLBYTES, then the array to each record field, followed by the record 
                 memcpy(&pageData[destinationOffset], data, nullBytes);
                 memcpy(&pageData[destinationOffset + nullBytes], field_start, num_bytes_array);
-                memcpy(&pageData[destinationOffset + nullBytes + num_bytes_array], &(((char*)data)[nullBytes]), recordBytes);
+                memcpy(&pageData[destinationOffset + nullBytes + num_bytes_array], &(((char*)data)[nullBytes]), recordBytes - nullBytes);
             } else {
                 cerr << "insertRecord: Unable to insert record data." << endl;
                 continue;
@@ -215,9 +215,9 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
     
     if (mustAppend) {
         memset(pageData, 0, PAGE_SIZE);
-        freeSpaceOffset = PAGE_SIZE - (recordBytes + num_bytes_array) - 1;
+        freeSpaceOffset = PAGE_SIZE - recordBytes - num_bytes_array - 1;
         // Copy in the record.
-        if (PAGE_SIZE - freeSpaceOffset >= recordBytes) {
+        if (PAGE_SIZE - freeSpaceOffset >= recordBytes + num_bytes_array) {
             // memcpy(&pageData[freeSpaceOffset], data, recordBytes);
             // cerr << "append page insert record info" << endl;
             // cerr << "size of array = " << num_bytes_array << endl;
@@ -226,7 +226,7 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
             // cerr << "putting the rest of the record at " << (freeSpaceOffset + nullBytes + num_bytes_array) << endl;
             memcpy(&pageData[freeSpaceOffset], data, nullBytes);
             memcpy(&pageData[freeSpaceOffset + nullBytes], field_start, num_bytes_array);
-            memcpy(&pageData[freeSpaceOffset + nullBytes + num_bytes_array], &(((char*)data)[nullBytes]), recordBytes);
+            memcpy(&pageData[freeSpaceOffset + nullBytes + num_bytes_array], &(((char*)data)[nullBytes]), recordBytes - nullBytes);
 
 
             // memcpy(&pageData[freeSpaceOffset], field_start, (sizeof(short) * recordDescriptor.size()));
