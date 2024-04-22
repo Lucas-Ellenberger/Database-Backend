@@ -239,7 +239,7 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
             return -6;
         }
 
-        if (freeSpaceOffset >= (4 * sizeof(short))) {
+        if ((unsigned)freeSpaceOffset >= (4 * sizeof(short))) {
             // Copy in the pointer to free space.
             directoryEntryOffset = 0;
             memcpy(&pageData[directoryEntryOffset], &freeSpaceOffset, sizeof(short));
@@ -284,12 +284,8 @@ RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const vector<Attri
     // Determine the record size.
     int nullBytes = ceil((double) recordDescriptor.size() / CHAR_BIT);
 
-
-
-
     //these will hold values of any field i from the range [start, end)
     short* attribute_offsets = (short *)calloc(recordDescriptor.size(), sizeof(short));
-
 
     char* pageData = (char *)malloc(PAGE_SIZE);
     memset(pageData, 0, PAGE_SIZE);
@@ -305,9 +301,7 @@ RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const vector<Attri
     short totalSlotsUsed = 0;
     
     memcpy(&totalSlotsUsed, &pageData[sizeof(short)], sizeof(short));
-    /* cerr << "Our DP believes: " << totalSlotsUsed << " are in use." << endl; */
-    /* cerr << "The RID is asking for slot: " << slotNum << endl; */
-    if (slotNum <= totalSlotsUsed) {
+    if (slotNum <= (unsigned)totalSlotsUsed) {
         short recordOffset = 0;
         short recordSize = 0;
         short pageDataOffset = (slotNum * (2 * sizeof(short)));
