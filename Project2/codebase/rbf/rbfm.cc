@@ -92,6 +92,9 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
 
     SlotDirectoryHeader slotHeader = getSlotDirectoryHeader(pageData);
 
+    // TODO: See if there is a slot in the directory that was deleted.
+    // Can reuse the old pageNum.
+
     // Setting up the return RID.
     rid.pageNum = i;
     rid.slotNum = slotHeader.recordEntriesNumber;
@@ -138,6 +141,7 @@ RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const vector<Attri
     if(slotHeader.recordEntriesNumber <= rid.slotNum)
         return RBFM_SLOT_DN_EXIST;
 
+    // TODO: Must check if the record is deleted or forwarded.
     // Gets the slot directory record entry data
     SlotDirectoryRecordEntry recordEntry = getSlotDirectoryRecordEntry(pageData, rid.slotNum);
 
@@ -209,6 +213,101 @@ RC RecordBasedFileManager::printRecord(const vector<Attribute> &recordDescriptor
     cout << "----" << endl;
 
     return SUCCESS;
+}
+
+RC deleteRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const RID &rid)
+{
+    // Retrieve the specified page
+    void * pageData = malloc(PAGE_SIZE);
+    if (fileHandle.readPage(rid.pageNum, pageData))
+        return RBFM_READ_FAILED;
+
+    // Checks if the specific slot id exists in the page
+    SlotDirectoryHeader slotHeader = getSlotDirectoryHeader(pageData);
+    
+    if(slotHeader.recordEntriesNumber <= rid.slotNum)
+        return RBFM_SLOT_DN_EXIST;
+
+    // TODO: Must check if the record is deleted or forwarded.
+    // If already deleted: ERROR.
+    // If forward, call delete record on the forwarded address:
+    // Then reflect the change in the current pages slot directory.
+
+    // Gets the slot directory record entry data
+    SlotDirectoryRecordEntry recordEntry = getSlotDirectoryRecordEntry(pageData, rid.slotNum);
+
+    // Delete the record at the entry.
+
+    // Shift over the record data by the length of the old record.
+
+    // Loop over every record entry in the slot directory.
+    // If the record offset was shifted (the starting offset is less than the one we deleted):
+    // Then, add the length of the deleted record.
+    
+    // Write back the page data
+
+    free(pageData);
+    return SUCCESS;
+}
+
+RC updateRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const void *data, const RID &rid)
+{
+    // Retrieve the specified page
+    void * pageData = malloc(PAGE_SIZE);
+    if (fileHandle.readPage(rid.pageNum, pageData))
+        return RBFM_READ_FAILED;
+
+    // Checks if the specific slot id exists in the page
+    SlotDirectoryHeader slotHeader = getSlotDirectoryHeader(pageData);
+    
+    if(slotHeader.recordEntriesNumber <= rid.slotNum)
+        return RBFM_SLOT_DN_EXIST;
+
+    // TODO: Must check if the record is deleted or forwarded.
+    // If already deleted: ERROR.
+    // If forwarded: call delete address on forwarded address.
+    // Then, call insert record to place it in a new slot / page.
+    // Update the forwarding address to reflect the change.
+
+    // Note: If we always delete and insert to a single new forward address:
+    // Then, we should never create chains of forwarding addresses.
+
+    // Update the offset and length in the corresponding slot directory.
+    // DO NOT change the number of entries in the SlotDirectoryHeader.
+
+    free(pageData);
+    return SUCCESS;
+}
+
+RC readAttribute(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const RID &rid, const string &attributeName, void *data)
+{
+    // Retrieve the specified page
+    void * pageData = malloc(PAGE_SIZE);
+    if (fileHandle.readPage(rid.pageNum, pageData))
+        return RBFM_READ_FAILED;
+
+    RC retValue = readRecord(fileHandle, recordDescriptor, rid, pageData);
+    if (retValue != SUCCESS) {
+        free(pageData);
+        return retValue;
+    }
+
+    // Read the specific attribute from pageData.
+
+    // Write the attribute to data.
+    
+    free(pageData);
+    return SUCCESS;
+}
+
+// Scan returns an iterator to allow the caller to go through the results one by one. 
+RC scan(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const string &conditionAttribute, const CompOp compOp, 
+		const void *value, const vector<string> &attributeNames, RBFM_ScanIterator &rbfm_ScanIterator)
+{
+    // Should be implemented in RF?
+    // TODO: Do not scan deleted records.
+    // TODO: Do not scan the same record twice!
+    // Watch out for forwarding addresses.
 }
 
 SlotDirectoryHeader RecordBasedFileManager::getSlotDirectoryHeader(void * page)
