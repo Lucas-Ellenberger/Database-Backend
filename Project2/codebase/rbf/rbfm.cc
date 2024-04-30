@@ -384,6 +384,7 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
             free(pageData);
             return RBFM_WRITE_FAILED;
         }
+        free(pageData);
         return SUCCESS;
     }
 
