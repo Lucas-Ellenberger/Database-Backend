@@ -17,8 +17,11 @@
 #define RBFM_APPEND_FAILED 4
 #define RBFM_READ_FAILED 5
 #define RBFM_WRITE_FAILED 6
-#define RBFM_SLOT_DN_EXIST 7
-#define RBFM_RECORD_DN_EXIST 8
+#define RBFM_INSERT_FAILED 7
+#define RBFM_DELETE_FAILED 8
+#define RBFM_UPDATE_FAILED 9
+#define RBFM_SLOT_ALR_DELETED 10
+#define RBFM_SLOT_DN_EXIST 11
 
 using namespace std;
 
@@ -68,7 +71,7 @@ typedef struct SlotDirectoryHeader
 
 typedef struct SlotDirectoryRecordEntry
 {
-  uint32_t length;
+  int32_t length;
   int32_t offset;
 } SlotDirectoryRecordEntry;
 
