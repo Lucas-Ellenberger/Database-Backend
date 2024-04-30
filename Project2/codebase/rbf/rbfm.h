@@ -18,6 +18,7 @@
 #define RBFM_READ_FAILED   5
 #define RBFM_WRITE_FAILED  6
 #define RBFM_SLOT_DN_EXIST 7
+#define RBFM_SLOT_ALR_DELETED 8
 
 using namespace std;
 
