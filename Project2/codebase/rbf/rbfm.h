@@ -60,7 +60,7 @@ typedef struct SlotDirectoryHeader
 
 typedef struct SlotDirectoryRecordEntry
 {
-    uint32_t length; 
+    int32_t length; 
     int32_t offset;
 } SlotDirectoryRecordEntry;
 

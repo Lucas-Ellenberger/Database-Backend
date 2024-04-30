@@ -235,14 +235,58 @@ RC deleteRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescripto
 
     // Gets the slot directory record entry data
     SlotDirectoryRecordEntry recordEntry = getSlotDirectoryRecordEntry(pageData, rid.slotNum);
+    if (recordEntry.length < 0) {
+        //this means record has been deleted
+        return RBFM_SLOT_ALR_DELETED;
+    }
+    else if (recordEntry.offset < 0) {
+        // this is a forwarding address
+        rid.pageNum = i;
+        rid.slotNum = slotHeader.recordEntriesNumber;
+        RID newRID;
+        newRID.pageNum = (recordEntry.offset*-1); // we need to be very careful about how we are defining the record offset. 
+                                                // If it is negative, we can either just set the final bit to 1, or we can multiply by -1. 
+                                                // these are likely not equivalent b/c Two's complement. So like... pick one
+        newRID.slotNum = recordEntry.length; // we shouldnt need to screw with the length, we just need to make sure that the MSB is only used
+                                             // to indicate whether something is deleted, and nothing more at all. If its forwarding address, 
+                                             // the value can be positive (MSB is 0)
+        deleteRecord (fileHandle, recordDescriptor, newRID);
+        // there may be things that need to be freed
+        return SUCCESS;
+    }
+
+    // if we got here, then entry is neither a forwarding address nor already deleted, meaning we have to delete it. 
+
 
     // Delete the record at the entry.
+    // to make this simple, we can set everything at that memory to 0, though it should be completely unnecessary (just doing it for safety)
+    memset(pageData + recordEntry.offset, 0, recordEntry.length); // The way the offset is currently handled will almost certainly need to be changed
+
+    
+
 
     // Shift over the record data by the length of the old record.
-
     // Loop over every record entry in the slot directory.
     // If the record offset was shifted (the starting offset is less than the one we deleted):
     // Then, add the length of the deleted record.
+
+    for(uint32_t i = rid.slotNum + 1; i < slotHeader.recordEntriesNumber; i += 1) {
+        void* buf = malloc(PAGE_SIZE); // create our separate buffer to put the singular record entry
+        SlotDirectoryRecordEntry next = getSlotDirectoryRecordEntry(pageData, i); // get the next record in order that are after the deleted record
+        memcpy(buf, pageData + next.offset, next.length); // copy the record to our buffer
+        memcpy(pageData + next.offset - recordEntry.length, buf, next.length); // copy the record from our buffer into the correct position in the original pageData
+        next.offset = next.offset - recordEntry.length;
+        setSlotDirectoryRecordEntry(pageData, i, next); // edits the directory record entry (length, offset)
+        free(buf); // free our buffer. We can move this outside the for loop if we want, so that we can reduce how many times we alloc and dealloc memory
+    }
+
+    // modify directory to reflect that the entry has been deleted
+    recordEntry.length = -1;
+    recordEntry.offset = 0;
+    // write it back
+    setSlotDirectoryRecordEntry(pageData, rid.slotNum, recordEntry);
+
+    
     
     // Write back the page data
 
