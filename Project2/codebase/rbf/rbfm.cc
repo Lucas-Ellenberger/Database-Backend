@@ -215,18 +215,20 @@ RC RecordBasedFileManager::printRecord(const vector<Attribute> &recordDescriptor
     return SUCCESS;
 }
 
-RC deleteRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const RID &rid)
+RC RecordBasedFileManager::deleteRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const RID &rid)
 {
     // Retrieve the specified page
-    void * pageData = malloc(PAGE_SIZE);
+    void* pageData = malloc(PAGE_SIZE);
     if (fileHandle.readPage(rid.pageNum, pageData))
         return RBFM_READ_FAILED;
 
     // Checks if the specific slot id exists in the page
     SlotDirectoryHeader slotHeader = getSlotDirectoryHeader(pageData);
     
-    if(slotHeader.recordEntriesNumber <= rid.slotNum)
+    if(slotHeader.recordEntriesNumber <= rid.slotNum) {
+        free(pageData);
         return RBFM_SLOT_DN_EXIST;
+    }
 
     // TODO: Must check if the record is deleted or forwarded.
     // If already deleted: ERROR.
@@ -235,22 +237,74 @@ RC deleteRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescripto
 
     // Gets the slot directory record entry data
     SlotDirectoryRecordEntry recordEntry = getSlotDirectoryRecordEntry(pageData, rid.slotNum);
+    if (recordEntry.length < 0) {
+        // This means record has been deleted.
+        free(pageData);
+        return RBFM_SLOT_ALR_DELETED;
+    }
+
+    if (recordEntry.offset < 0) {
+        // This is a forwarding address.
+        RID newRID;
+        newRID.pageNum = (recordEntry.offset*-1); // we need to be very careful about how we are defining the record offset. 
+                                                // If it is negative, we can either just set the final bit to 1, or we can multiply by -1. 
+                                                // these are likely not equivalent b/c Two's complement. So like... pick one
+        newRID.slotNum = recordEntry.length; // we shouldnt need to screw with the length, we just need to make sure that the MSB is only used
+                                             // to indicate whether something is deleted, and nothing more at all. If its forwarding address, 
+                                             // the value can be positive (MSB is 0)
+        deleteRecord(fileHandle, recordDescriptor, newRID);
+        recordEntry.length = -1;
+        recordEntry.offset = 0;
+        setSlotDirectoryRecordEntry(pageData, rid.slotNum, recordEntry);
+
+        if (fileHandle.writePage(rid.pageNum, pageData))
+            return RBFM_WRITE_FAILED;
+
+        free(pageData);
+        return SUCCESS;
+    }
+    // The entry is neither a forwarding address nor already deleted, meaning we have to delete it. 
 
     // Delete the record at the entry.
+    // to make this simple, we can set everything at that memory to 0, though it should be completely unnecessary (just doing it for safety)
+    memset((char *)pageData + recordEntry.offset, 0, recordEntry.length); // The way the offset is currently handled will almost certainly need to be changed
 
     // Shift over the record data by the length of the old record.
-
     // Loop over every record entry in the slot directory.
     // If the record offset was shifted (the starting offset is less than the one we deleted):
     // Then, add the length of the deleted record.
+    // Beginning of free space: slotHeader.recordEntriesNumber * sizeof(SlotDirectoryRecordEntry) - sizeof(SlotDirectoryHeader);
+    // End of free space: slotHeader.freeSpaceOffset;
+    unsigned shiftBeginning = sizeof(SlotDirectoryHeader) + slotHeader.recordEntriesNumber * sizeof(SlotDirectoryRecordEntry);
+    unsigned shiftSize = recordEntry.offset - shiftBeginning;
+
+    memmove((char *)pageData + shiftBeginning + recordEntry.length, (char *)pageData + shiftBeginning, shiftSize);
+    // Zero out the the where the data used to be.
+    memset((char *)pageData + shiftBeginning, 0, recordEntry.length);
+
+    for(uint32_t i = 0; i < slotHeader.recordEntriesNumber; i += 1) {
+        SlotDirectoryRecordEntry next = getSlotDirectoryRecordEntry(pageData, i); // get the next record in order that are after the deleted record
+        if (next.offset < recordEntry.offset) {
+            next.offset += recordEntry.length;
+            setSlotDirectoryRecordEntry(pageData, i, next);
+        }
+    }
+
+    // modify directory to reflect that the entry has been deleted
+    recordEntry.length = -1;
+    recordEntry.offset = 0;
+    // write it back
+    setSlotDirectoryRecordEntry(pageData, rid.slotNum, recordEntry);
     
     // Write back the page data
+    if (fileHandle.writePage(rid.pageNum, pageData))
+        return RBFM_WRITE_FAILED;
 
     free(pageData);
     return SUCCESS;
 }
 
-RC updateRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const void *data, const RID &rid)
+RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const void *data, const RID &rid)
 {
     // Retrieve the specified page
     void * pageData = malloc(PAGE_SIZE);
@@ -279,7 +333,7 @@ RC updateRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescripto
     return SUCCESS;
 }
 
-RC readAttribute(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const RID &rid, const string &attributeName, void *data)
+RC RecordBasedFileManager::readAttribute(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const RID &rid, const string &attributeName, void *data)
 {
     // Retrieve the specified page
     void * pageData = malloc(PAGE_SIZE);
@@ -308,6 +362,7 @@ RC scan(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const
     // TODO: Do not scan deleted records.
     // TODO: Do not scan the same record twice!
     // Watch out for forwarding addresses.
+    return -1;
 }
 
 SlotDirectoryHeader RecordBasedFileManager::getSlotDirectoryHeader(void * page)
