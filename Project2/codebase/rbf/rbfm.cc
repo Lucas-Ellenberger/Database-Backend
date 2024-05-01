@@ -155,13 +155,12 @@ RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const vector<Attri
     if (fileHandle.readPage(rid.pageNum, pageData))
         return RBFM_READ_FAILED;
 
-    // Checks if the specific slot id exists in the page
+    // Checks if the specific slot id exists in the page.
     SlotDirectoryHeader slotHeader = getSlotDirectoryHeader(pageData);
     if (slotHeader.recordEntriesNumber <= rid.slotNum)
         return RBFM_SLOT_DN_EXIST;
 
-    // TODO: Must check if the record is deleted or forwarded.
-    // Gets the slot directory record entry data
+    // Gets the slot directory record entry data.
     SlotDirectoryRecordEntry recordEntry = getSlotDirectoryRecordEntry(pageData, rid.slotNum);
     if (recordEntry.length < 0)
     {
@@ -188,7 +187,7 @@ RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const vector<Attri
 
 RC RecordBasedFileManager::printRecord(const vector<Attribute> &recordDescriptor, const void *data)
 {
-    // Parse the null indicator and save it into an array
+    // Parse the null indicator and save it into an array.
     int nullIndicatorSize = getNullIndicatorSize(recordDescriptor.size());
     char nullIndicator[nullIndicatorSize];
     memset(nullIndicator, 0, nullIndicatorSize);
@@ -413,6 +412,7 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
             free(pageData);
             return RBFM_WRITE_FAILED;
         }
+
         free(pageData);
         return SUCCESS;
     }
@@ -474,30 +474,69 @@ RC RecordBasedFileManager::readAttribute(FileHandle &fileHandle, const vector<At
         return readAttribute(fileHandle, recordDescriptor, forwardingRid, attributeName, data);
     }
 
-    void *recordData = malloc(PAGE_SIZE);
-    if (recordData == NULL)
-        return RBFM_MALLOC_FAILED;
+    // Points to start of record
+    char *start = (char *)pageData + recordEntry.offset;
 
-    getRecordAtOffset(pageData, recordEntry.offset, recordDescriptor, recordData);
+    // Read in the null indicator
+    int nullIndicatorSize = getNullIndicatorSize(recordDescriptor.size());
+    char nullIndicator[nullIndicatorSize];
+    memset(nullIndicator, 0, nullIndicatorSize);
 
-    for (unsigned i = 0; i < recordDescriptor.size(); i++) {
+    // Get number of columns and size of the null indicator for this record
+    RecordLength len = 0;
+    memcpy(&len, start, sizeof(RecordLength));
+    int recordNullIndicatorSize = getNullIndicatorSize(len);
+
+    // Read in the existing null indicator
+	memcpy(nullIndicator, (char *)pageData, nullIndicatorSize);
+
+    // If this new recordDescriptor has had fields added to it, we set all of the new fields to null
+    for (unsigned i = len; i < recordDescriptor.size(); i++)
+    {
+        int indicatorIndex = (i + 1) / CHAR_BIT;
+        int indicatorMask = 1 << (CHAR_BIT - 1 - (i % CHAR_BIT));
+        nullIndicator[indicatorIndex] |= indicatorMask;
+    }
+    // TODO: Do we need to give back the null indicators?
+    // Write out null indicator
+    memcpy(data, nullIndicator, nullIndicatorSize);
+
+    // Initialize some offsets
+    // rec_offset: points to data in the record. We move this forward as we read data from our record
+    unsigned rec_offset = sizeof(RecordLength) + recordNullIndicatorSize + len * sizeof(ColumnOffset);
+    // data_offset: points to our current place in the output data. We move this forward as we write to data.
+    unsigned data_offset = nullIndicatorSize;
+    // directory_base: points to the start of our directory of indices
+    char *directory_base = start + sizeof(RecordLength) + recordNullIndicatorSize;
+
+    unsigned i = 0;
+    for (i = 0; i < recordDescriptor.size(); i++)
+    {
         if (recordDescriptor[i].name == attributeName) {
+            if (fieldIsNull(nullIndicator, i))
+				break;
+
+            ColumnOffset endPointer;
+            memcpy(&endPointer, directory_base + i * sizeof(ColumnOffset), sizeof(ColumnOffset));
+            // If we skipped to a column, the previous column offset has the beginning of our record.
+            if (i > 0)
+                memcpy(&rec_offset, directory_base + (i - 1) * sizeof(ColumnOffset), sizeof(ColumnOffset));
+
+            // rec_offset keeps track of start of column, so end-start = total size
+            uint32_t fieldSize = endPointer - rec_offset;
+
+            // Special case for varchar, we must give data the size of varchar first
+            if (recordDescriptor[i].type == TypeVarChar)
+            {
+                memcpy((char *)data + data_offset, &fieldSize, VARCHAR_LENGTH_SIZE);
+                data_offset += VARCHAR_LENGTH_SIZE;
+            }
+            // Next we copy bytes equal to the size of the field and increase our offsets
+            memcpy((char *)data + data_offset, start + rec_offset, fieldSize);
+
             break;
         }
     }
-
-    // TODO: Check if the attribute is null.
-    // Copy in the length of the attribute.
-    // Special case: VarChar.
-    int nullIndicatorSize = getNullIndicatorSize();
-
-    /* if (fieldIsNull()) */
-
-    /* ColumnOffset */ 
-
-    // Read the specific attribute from pageData.
-
-    // Write the attribute to data.
 
     free(pageData);
     return SUCCESS;
