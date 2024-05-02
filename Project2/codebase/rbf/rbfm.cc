@@ -73,6 +73,7 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
     void *pageData = malloc(PAGE_SIZE);
     if (pageData == NULL)
         return RBFM_MALLOC_FAILED;
+
     bool pageFound = false;
     unsigned i;
     unsigned numPages = fileHandle.getNumberOfPages();
@@ -97,15 +98,25 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
 
     SlotDirectoryHeader slotHeader = getSlotDirectoryHeader(pageData);
 
-    // TODO: See if there is a slot in the directory that was deleted.
-    // Can reuse the old pageNum.
-
     // Setting up the return RID.
     rid.pageNum = i;
-    rid.slotNum = slotHeader.recordEntriesNumber;
+    bool foundSlot = false;
+    SlotDirectoryRecordEntry newRecordEntry;
+    for (uint32_t slot = 0; slot < slotHeader.recordEntriesNumber; slot += 1)
+    {
+        newRecordEntry = getSlotDirectoryRecordEntry(pageData, slot);
+        if (newRecordEntry.length < 0)
+        {
+            foundSlot = true;
+            rid.slotNum = slot;
+            break;
+        }
+    }
+
+    if (!foundSlot)
+        rid.slotNum = slotHeader.recordEntriesNumber;
 
     // Adding the new record reference in the slot directory.
-    SlotDirectoryRecordEntry newRecordEntry;
     newRecordEntry.length = recordSize;
     newRecordEntry.offset = slotHeader.freeSpaceOffset - recordSize;
     setSlotDirectoryRecordEntry(pageData, rid.slotNum, newRecordEntry);
@@ -138,18 +149,34 @@ RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const vector<Attri
 {
     // Retrieve the specified page
     void *pageData = malloc(PAGE_SIZE);
+    if (pageData == NULL)
+        return RBFM_MALLOC_FAILED;
+
     if (fileHandle.readPage(rid.pageNum, pageData))
         return RBFM_READ_FAILED;
 
-    // Checks if the specific slot id exists in the page
+    // Checks if the specific slot id exists in the page.
     SlotDirectoryHeader slotHeader = getSlotDirectoryHeader(pageData);
-
     if (slotHeader.recordEntriesNumber <= rid.slotNum)
         return RBFM_SLOT_DN_EXIST;
 
-    // TODO: Must check if the record is deleted or forwarded.
-    // Gets the slot directory record entry data
+    // Gets the slot directory record entry data.
     SlotDirectoryRecordEntry recordEntry = getSlotDirectoryRecordEntry(pageData, rid.slotNum);
+    if (recordEntry.length < 0)
+    {
+        free(pageData);
+        return RBFM_SLOT_ALR_DELETED;
+    }
+
+    if (recordEntry.offset < 0)
+    {
+        // This is a forwarding address.
+        RID newRID;
+        newRID.pageNum = (recordEntry.offset * -1);
+        newRID.slotNum = recordEntry.length;
+        free(pageData);
+        return readRecord(fileHandle, recordDescriptor, newRID, data);
+    }
 
     // Retrieve the actual entry data
     getRecordAtOffset(pageData, recordEntry.offset, recordDescriptor, data);
@@ -160,7 +187,7 @@ RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const vector<Attri
 
 RC RecordBasedFileManager::printRecord(const vector<Attribute> &recordDescriptor, const void *data)
 {
-    // Parse the null indicator and save it into an array
+    // Parse the null indicator and save it into an array.
     int nullIndicatorSize = getNullIndicatorSize(recordDescriptor.size());
     char nullIndicator[nullIndicatorSize];
     memset(nullIndicator, 0, nullIndicatorSize);
@@ -226,6 +253,9 @@ RC RecordBasedFileManager::deleteRecord(FileHandle &fileHandle, const vector<Att
 {
     // Retrieve the specified page
     void *pageData = malloc(PAGE_SIZE);
+    if (pageData == NULL)
+        return RBFM_MALLOC_FAILED;
+
     if (fileHandle.readPage(rid.pageNum, pageData))
         return RBFM_READ_FAILED;
 
@@ -237,11 +267,6 @@ RC RecordBasedFileManager::deleteRecord(FileHandle &fileHandle, const vector<Att
         free(pageData);
         return RBFM_SLOT_DN_EXIST;
     }
-
-    // TODO: Must check if the record is deleted or forwarded.
-    // If already deleted: ERROR.
-    // If forward, call delete record on the forwarded address:
-    // Then reflect the change in the current pages slot directory.
 
     // Gets the slot directory record entry data
     SlotDirectoryRecordEntry recordEntry = getSlotDirectoryRecordEntry(pageData, rid.slotNum);
@@ -283,8 +308,6 @@ RC RecordBasedFileManager::deleteRecord(FileHandle &fileHandle, const vector<Att
     // Loop over every record entry in the slot directory.
     // If the record offset was shifted (the starting offset is less than the one we deleted):
     // Then, add the length of the deleted record.
-    // Beginning of free space: slotHeader.recordEntriesNumber * sizeof(SlotDirectoryRecordEntry) - sizeof(SlotDirectoryHeader);
-    // End of free space: slotHeader.freeSpaceOffset;
     unsigned shiftBeginning = sizeof(SlotDirectoryHeader) + slotHeader.recordEntriesNumber * sizeof(SlotDirectoryRecordEntry);
     unsigned shiftSize = recordEntry.offset - shiftBeginning;
 
@@ -320,11 +343,15 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
 {
     // Retrieve the specified page
     void *pageData = malloc(PAGE_SIZE);
+    if (pageData == NULL)
+        return RBFM_MALLOC_FAILED;
+
     if (fileHandle.readPage(rid.pageNum, pageData))
     {
         free(pageData);
         return RBFM_READ_FAILED;
-    };
+    }
+ 
     SlotDirectoryHeader slotHeader = getSlotDirectoryHeader(pageData);
     // Checks if the specific slot id exists in the page
     if (slotHeader.recordEntriesNumber <= rid.slotNum)
@@ -332,9 +359,8 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
         free(pageData);
         return RBFM_SLOT_DN_EXIST;
     }
+
     SlotDirectoryRecordEntry oldEntry = getSlotDirectoryRecordEntry(pageData, rid.slotNum);
-    // TODO: Must check if the record is deleted or forwarded.
-    // If already deleted: ERROR.
     // If forwarded: call delete address on forwarded address.
     // Then, call insert record to place it in a new slot / page.
     // Update the forwarding address to reflect the change.
@@ -365,11 +391,13 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
             free(pageData);
             return RBFM_DELETE_FAILED;
         }
+
         if (insertRecord(fileHandle, recordDescriptor, data, forwardingRid)) // After inserting, forwardingRid is updated with new rid
         {
             free(pageData);
             return RBFM_INSERT_FAILED;
         }
+
         // Preps RecordEntry to be inserted in directory
         SlotDirectoryRecordEntry newEntry;
         newEntry.offset = forwardingRid.pageNum * -1; // Multiply by -1 to set forwarding flag
@@ -384,6 +412,7 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
             free(pageData);
             return RBFM_WRITE_FAILED;
         }
+
         free(pageData);
         return SUCCESS;
     }
@@ -420,20 +449,96 @@ RC RecordBasedFileManager::readAttribute(FileHandle &fileHandle, const vector<At
 {
     // Retrieve the specified page
     void *pageData = malloc(PAGE_SIZE);
+    if (pageData == NULL)
+        return RBFM_MALLOC_FAILED;
+
     if (fileHandle.readPage(rid.pageNum, pageData))
         return RBFM_READ_FAILED;
 
-    RC retValue = readRecord(fileHandle, recordDescriptor, rid, pageData);
-    if (retValue != SUCCESS)
-    {
+    SlotDirectoryHeader slotHeader = getSlotDirectoryHeader(pageData);
+
+    if (slotHeader.recordEntriesNumber <= rid.slotNum)
+        return RBFM_SLOT_DN_EXIST;
+
+    SlotDirectoryRecordEntry recordEntry = getSlotDirectoryRecordEntry(pageData, rid.slotNum);
+    if (recordEntry.length < 0) {
         free(pageData);
-        return retValue;
+        return RBFM_SLOT_ALR_DELETED;
     }
 
-    // Read the specific attribute from pageData.
+    if (recordEntry.offset < 0) {
+        RID forwardingRid;
+        forwardingRid.pageNum = recordEntry.offset * -1;
+        forwardingRid.slotNum = recordEntry.length;
+        free(pageData);
+        return readAttribute(fileHandle, recordDescriptor, forwardingRid, attributeName, data);
+    }
 
+    // Points to start of record
+    char *start = (char *)pageData + recordEntry.offset;
+
+    // Read in the null indicator
+    int nullIndicatorSize = getNullIndicatorSize(recordDescriptor.size());
+    char nullIndicator[nullIndicatorSize];
+    memset(nullIndicator, 0, nullIndicatorSize);
+
+    // Get number of columns and size of the null indicator for this record
+    RecordLength len = 0;
+    memcpy(&len, start, sizeof(RecordLength));
+    int recordNullIndicatorSize = getNullIndicatorSize(len);
+
+    // Read in the existing null indicator
+	memcpy(nullIndicator, (char *)pageData, nullIndicatorSize);
+
+    // If this new recordDescriptor has had fields added to it, we set all of the new fields to null
+    for (unsigned i = len; i < recordDescriptor.size(); i++)
+    {
+        int indicatorIndex = (i + 1) / CHAR_BIT;
+        int indicatorMask = 1 << (CHAR_BIT - 1 - (i % CHAR_BIT));
+        nullIndicator[indicatorIndex] |= indicatorMask;
+    }
+    // TODO: Do we need to give back the null indicators?
+    // Write out null indicator
+    memcpy(data, nullIndicator, nullIndicatorSize);
+
+    // Initialize some offsets
+    // rec_offset: points to data in the record. We move this forward as we read data from our record
+    unsigned rec_offset = sizeof(RecordLength) + recordNullIndicatorSize + len * sizeof(ColumnOffset);
+    // data_offset: points to our current place in the output data. We move this forward as we write to data.
+    unsigned data_offset = nullIndicatorSize;
+    // directory_base: points to the start of our directory of indices
+    char *directory_base = start + sizeof(RecordLength) + recordNullIndicatorSize;
+
+    unsigned i = 0;
+    for (i = 0; i < recordDescriptor.size(); i++)
+    {
+        if (recordDescriptor[i].name == attributeName) {
+            if (fieldIsNull(nullIndicator, i))
+				break;
+
+            ColumnOffset endPointer;
+            memcpy(&endPointer, directory_base + i * sizeof(ColumnOffset), sizeof(ColumnOffset));
+            // If we skipped to a column, the previous column offset has the beginning of our record.
+            if (i > 0)
+                memcpy(&rec_offset, directory_base + (i - 1) * sizeof(ColumnOffset), sizeof(ColumnOffset));
+
+            // rec_offset keeps track of start of column, so end-start = total size
+            uint32_t fieldSize = endPointer - rec_offset;
+
+            // Special case for varchar, we must give data the size of varchar first
+            if (recordDescriptor[i].type == TypeVarChar)
+            {
+                memcpy((char *)data + data_offset, &fieldSize, VARCHAR_LENGTH_SIZE);
+                data_offset += VARCHAR_LENGTH_SIZE;
+            }
+            // Next we copy bytes equal to the size of the field and increase our offsets
+            memcpy((char *)data + data_offset, start + rec_offset, fieldSize);
+
+            break;
+        }
+    }
     // Write the attribute to data.
-
+    
     free(pageData);
     return SUCCESS;
 }

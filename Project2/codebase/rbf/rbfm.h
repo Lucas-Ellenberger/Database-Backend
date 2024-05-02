@@ -22,6 +22,7 @@
 #define RBFM_UPDATE_FAILED 9
 #define RBFM_SLOT_ALR_DELETED 10
 #define RBFM_SLOT_DN_EXIST 11
+#define RBFM_READ_NULL_ATTR 12
 
 using namespace std;
 
