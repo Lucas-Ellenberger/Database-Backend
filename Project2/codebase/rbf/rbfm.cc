@@ -350,8 +350,8 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
     {
         free(pageData);
         return RBFM_READ_FAILED;
-    };
-
+    }
+ 
     SlotDirectoryHeader slotHeader = getSlotDirectoryHeader(pageData);
     // Checks if the specific slot id exists in the page
     if (slotHeader.recordEntriesNumber <= rid.slotNum)
@@ -537,7 +537,8 @@ RC RecordBasedFileManager::readAttribute(FileHandle &fileHandle, const vector<At
             break;
         }
     }
-
+    // Write the attribute to data.
+    
     free(pageData);
     return SUCCESS;
 }
