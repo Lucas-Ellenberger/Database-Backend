@@ -214,6 +214,8 @@ private:
   const void *value;
   const vector<string> *attributeNames;
   void *pageData;
+
+bool acceptRecord(unsigned offset);
 };
 
 #endif
