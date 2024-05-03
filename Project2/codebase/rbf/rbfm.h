@@ -215,7 +215,10 @@ private:
   const vector<string> *attributeNames;
   void *pageData;
 
-bool acceptRecord(unsigned offset);
+  bool acceptRecord(unsigned offset);
+  bool intCompare(int *compare);
+  bool floatCompare(float *compare);
+  bool stringCompare(char *compare, uint32_t length);
 };
 
 #endif
