@@ -497,7 +497,6 @@ RC RecordBasedFileManager::readAttribute(FileHandle &fileHandle, const vector<At
         int indicatorMask = 1 << (CHAR_BIT - 1 - (i % CHAR_BIT));
         nullIndicator[indicatorIndex] |= indicatorMask;
     }
-    // TODO: Do we need to give back the null indicators?
     // Write out null indicator
     memcpy(data, nullIndicator, nullIndicatorSize);
 
@@ -533,11 +532,9 @@ RC RecordBasedFileManager::readAttribute(FileHandle &fileHandle, const vector<At
             }
             // Next we copy bytes equal to the size of the field and increase our offsets
             memcpy((char *)data + data_offset, start + rec_offset, fieldSize);
-
             break;
         }
     }
-    // Write the attribute to data.
     
     free(pageData);
     return SUCCESS;
@@ -547,11 +544,13 @@ RC RecordBasedFileManager::readAttribute(FileHandle &fileHandle, const vector<At
 RC RecordBasedFileManager::scan(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const string &conditionAttribute, const CompOp compOp,
                                 const void *value, const vector<string> &attributeNames, RBFM_ScanIterator &rbfm_ScanIterator)
 {
-    // Should be implemented in RF?
-    // TODO: Do not scan deleted records.
-    // TODO: Do not scan the same record twice!
-    // Watch out for forwarding addresses.
-    return -1;
+	rbfm_ScanIterator.fileHandle = &fileHandle;
+	rbfm_ScanIterator.recordDescriptor = &recordDescriptor;
+    rbfm_ScanIterator.conditionAttribute = &conditionAttribute;
+    rbfm_ScanIterator.compOp = compOp;
+    rbfm_ScanIterator.value = value;
+    rbfm_ScanIterator.attributeNames = &attributeNames;
+    return SUCCESS;
 }
 
 SlotDirectoryHeader RecordBasedFileManager::getSlotDirectoryHeader(void *page)
@@ -787,4 +786,63 @@ void RecordBasedFileManager::setRecordAtOffset(void *page, unsigned offset, cons
         memcpy(start + header_offset, &rec_offset, sizeof(ColumnOffset));
         header_offset += sizeof(ColumnOffset);
     }
+}
+
+// RBFM_ScanIterator is an iterator to go through records
+// The way to use it is like the following:
+//  RBFM_ScanIterator rbfmScanIterator;
+//  rbfm.scan(..., rbfmScanIterator);
+//  while (rbfmScanIterator(rid, data) != RBFM_EOF) {
+//    process the data;
+//  }
+//  rbfmScanIterator.close();
+
+RBFM_ScanIterator::RBFM_ScanIterator()
+{
+}
+
+RBFM_ScanIterator::~RBFM_ScanIterator()
+{
+}
+
+// Never keep the results in the memory. When getNextRecord() is called,
+// a satisfying record needs to be fetched from the file.
+// "data" follows the same format as RecordBasedFileManager::insertRecord().
+RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data)
+{
+    RecordBasedFileManager *rbfm = RecordBasedFileManager::instance();
+    unsigned numPages = fileHandle->getNumberOfPages();
+    unsigned currPageNum;
+    if (this->returnedRID == NULL) {
+        currPageNum = 0;
+        if (this->fileHandle->readPage(0, this->pageData))
+            return RBFM_READ_FAILED;
+    } else {
+        currPageNum = returnedRID->pageNum;
+    }
+
+    // TODO: We want to loop from current page to numPages.
+    // We want to loop over every record entry in the directory.
+    // If deleted or forwarded, skip.
+    // If not, grab the record.
+    // Check if record satisfies the condition.
+    // If it does, construct data to have the reduced number of null indicators.
+    // Then, write in onlt the correct fields.
+    // Use read record and read attribute as guides.
+    while (currPageNum < numPages) {
+        SlotDirectoryHeader header = rbfm->getSlotDirectoryHeader(this->pageData);
+        SlotDirectoryRecordEntry recordEntry;
+        for (uint16_t i = 0; i < header.recordEntriesNumber; i++) {
+            recordEntry = rbfm->getSlotDirectoryRecordEntry(this->pageData, i);
+        }
+    }
+
+    return RBFM_EOF;
+}
+
+RC RBFM_ScanIterator::close()
+{
+    if (this->pageData != NULL)
+        free(this->pageData);
+    return SUCCESS;
 }

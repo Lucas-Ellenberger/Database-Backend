@@ -81,6 +81,7 @@ typedef SlotDirectoryRecordEntry *SlotDirectory;
 typedef uint16_t ColumnOffset;
 
 typedef uint16_t RecordLength;
+
 /********************************************************************************
 The scan iterator is NOT required to be implemented for the part 1 of the project
 ********************************************************************************/
@@ -99,14 +100,24 @@ The scan iterator is NOT required to be implemented for the part 1 of the projec
 class RBFM_ScanIterator
 {
 public:
-  RBFM_ScanIterator(){};
-  ~RBFM_ScanIterator(){};
+
+  FileHandle *fileHandle;
+  const vector<Attribute> *recordDescriptor;
+  const string *conditionAttribute;
+  CompOp compOp;
+  const void *value;
+  const vector<string> *attributeNames;
+  void *pageData;
+  RID *returnedRID;
+
+  RBFM_ScanIterator();
+  ~RBFM_ScanIterator();
 
   // Never keep the results in the memory. When getNextRecord() is called,
   // a satisfying record needs to be fetched from the file.
   // "data" follows the same format as RecordBasedFileManager::insertRecord().
-  RC getNextRecord(RID &rid, void *data) { return RBFM_EOF; };
-  RC close() { return -1; };
+  RC getNextRecord(RID &rid, void *data);
+  RC close();
 };
 
 class RecordBasedFileManager
@@ -166,6 +177,7 @@ public:
           const vector<string> &attributeNames, // a list of projected attributes
           RBFM_ScanIterator &rbfm_ScanIterator);
 
+  friend class RBFM_ScanIterator;
 public:
 protected:
   RecordBasedFileManager();
