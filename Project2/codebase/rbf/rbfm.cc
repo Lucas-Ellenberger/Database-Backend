@@ -544,12 +544,7 @@ RC RecordBasedFileManager::readAttribute(FileHandle &fileHandle, const vector<At
 RC RecordBasedFileManager::scan(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const string &conditionAttribute, const CompOp compOp,
                                 const void *value, const vector<string> &attributeNames, RBFM_ScanIterator &rbfm_ScanIterator)
 {
-	rbfm_ScanIterator.fileHandle = &fileHandle;
-	rbfm_ScanIterator.recordDescriptor = &recordDescriptor;
-    rbfm_ScanIterator.conditionAttribute = &conditionAttribute;
-    rbfm_ScanIterator.compOp = compOp;
-    rbfm_ScanIterator.value = value;
-    rbfm_ScanIterator.attributeNames = &attributeNames;
+    rbfm_ScanIterator.Open(fileHandle, recordDescriptor, conditionAttribute, compOp, value, attributeNames);
     return SUCCESS;
 }
 
@@ -805,37 +800,114 @@ RBFM_ScanIterator::~RBFM_ScanIterator()
 {
 }
 
+void RBFM_ScanIterator::Open(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const string &conditionAttribute, const CompOp compOp,
+      const void *value, const vector<string> &attributeNames) {
+	this->fileHandle = &fileHandle;
+    this->totalPages = fileHandle.getNumberOfPages();
+	this->recordDescriptor = &recordDescriptor;
+    this->conditionAttribute = &conditionAttribute;
+    this->compOp = compOp;
+    this->value = value;
+    this->attributeNames = &attributeNames;
+}
+
 // Never keep the results in the memory. When getNextRecord() is called,
 // a satisfying record needs to be fetched from the file.
 // "data" follows the same format as RecordBasedFileManager::insertRecord().
 RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data)
 {
-    RecordBasedFileManager *rbfm = RecordBasedFileManager::instance();
-    unsigned numPages = fileHandle->getNumberOfPages();
-    unsigned currPageNum;
-    if (this->returnedRID == NULL) {
-        currPageNum = 0;
-        if (this->fileHandle->readPage(0, this->pageData))
-            return RBFM_READ_FAILED;
-    } else {
-        currPageNum = returnedRID->pageNum;
+    while (this->pageNum < this->totalPages) {
+        if (this->recordNum == 0) {
+            if (this->fileHandle->readPage(this->pageNum, this->pageData))
+                return RBFM_READ_FAILED;
+
+            this->totalRecordEntries = rbfm->getSlotDirectoryHeader(this->pageData);
+            this->recordNum = 0;
+        }
+
+        SlotDirectoryRecordEntry recordEntry;
+        while (this->recordNum < this->totalRecordEntries) {
+            recordEntry = rbfm->getSlotDirectoryRecordEntry(this->pageData, this->recordNum);
+            if (recordEntry.length < 0) {
+                this->recordNum++;
+                continue;
+            }
+
+            if (recordEntry.offset < 0) {
+                this->recordNum++;
+                continue;
+            }
+            // Pointer to start of record
+            char *start = (char *)page + offset;
+
+            // Allocate space for null indicator.
+            int nullIndicatorSize = getNullIndicatorSize(recordDescriptor.size());
+            char nullIndicator[nullIndicatorSize];
+            memset(nullIndicator, 0, nullIndicatorSize);
+
+            // Get number of columns and size of the null indicator for this record
+            RecordLength len = 0;
+            memcpy(&len, start, sizeof(RecordLength));
+            int recordNullIndicatorSize = getNullIndicatorSize(len);
+
+            // Read in the existing null indicator
+            memcpy(nullIndicator, start + sizeof(RecordLength), recordNullIndicatorSize);
+
+            // If this new recordDescriptor has had fields added to it, we set all of the new fields to null
+            for (unsigned i = len; i < recordDescriptor.size(); i++)
+            {
+                int indicatorIndex = (i + 1) / CHAR_BIT;
+                int indicatorMask = 1 << (CHAR_BIT - 1 - (i % CHAR_BIT));
+                nullIndicator[indicatorIndex] |= indicatorMask;
+            }
+            // Write out null indicator
+            memcpy(data, nullIndicator, nullIndicatorSize);
+
+            // Initialize some offsets
+            // rec_offset: points to data in the record. We move this forward as we read data from our record
+            unsigned rec_offset = sizeof(RecordLength) + recordNullIndicatorSize + len * sizeof(ColumnOffset);
+            // data_offset: points to our current place in the output data. We move this forward as we write to data.
+            unsigned data_offset = nullIndicatorSize;
+            // directory_base: points to the start of our directory of indices
+            char *directory_base = start + sizeof(RecordLength) + recordNullIndicatorSize;
+
+            for (unsigned i = 0; i < recordDescriptor.size(); i++)
+            {
+                if (fieldIsNull(nullIndicator, i))
+                    continue;
+
+                // Grab pointer to end of this column
+                ColumnOffset endPointer;
+                memcpy(&endPointer, directory_base + i * sizeof(ColumnOffset), sizeof(ColumnOffset));
+
+                // rec_offset keeps track of start of column, so end-start = total size
+                uint32_t fieldSize = endPointer - rec_offset;
+
+                // Special case for varchar, we must give data the size of varchar first
+                if (recordDescriptor[i].type == TypeVarChar)
+                {
+                    memcpy((char *)data + data_offset, &fieldSize, VARCHAR_LENGTH_SIZE);
+                    data_offset += VARCHAR_LENGTH_SIZE;
+                }
+                // Next we copy bytes equal to the size of the field and increase our offsets
+                memcpy((char *)data + data_offset, start + rec_offset, fieldSize);
+                rec_offset += fieldSize;
+                data_offset += fieldSize;
+            }
+
+            this->recordNum++;
+        }
+
+        // Increment the page number and reset the record num.
+        this->pageNum++;
+        this->recordNum = 0;
     }
 
-    // TODO: We want to loop from current page to numPages.
-    // We want to loop over every record entry in the directory.
-    // If deleted or forwarded, skip.
-    // If not, grab the record.
+    // TODO:
     // Check if record satisfies the condition.
     // If it does, construct data to have the reduced number of null indicators.
     // Then, write in onlt the correct fields.
     // Use read record and read attribute as guides.
-    while (currPageNum < numPages) {
-        SlotDirectoryHeader header = rbfm->getSlotDirectoryHeader(this->pageData);
-        SlotDirectoryRecordEntry recordEntry;
-        for (uint16_t i = 0; i < header.recordEntriesNumber; i++) {
-            recordEntry = rbfm->getSlotDirectoryRecordEntry(this->pageData, i);
-        }
-    }
 
     return RBFM_EOF;
 }
