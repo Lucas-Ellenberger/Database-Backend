@@ -10,6 +10,7 @@
 using namespace std;
 
 # define RM_EOF (-1)  // end of a scan operator
+#define CATALOG_DSN_EXIST -2
 
 // RM_ScanIterator is an iteratr to go through tuples
 class RM_ScanIterator {
@@ -69,6 +70,11 @@ protected:
 
 private:
   static RelationManager *_rm;
+//   all internal fields
+    RecordBasedFileManager* catalog;
+    FileHandle tableHandle;
+    FileHandle columnHandle;
+    uint32_t table_id_count;
 };
 
 #endif
