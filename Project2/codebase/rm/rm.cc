@@ -46,6 +46,14 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
 
 RC RelationManager::insertTuple(const string &tableName, const void *data, RID &rid)
 {
+    // Checks if table exists in catalog
+    /*if (tableName){
+        return TB_DN_EXIST;
+    }
+    */
+   
+
+
     return -1;
 }
 
