@@ -71,7 +71,7 @@ RC RelationManager::createCatalog()
     {
         cerr << "Unable to insert \"Table\" record into table Table" << endl;
     }
-  
+
     prepareTableRecord(tableDescriptor.size(), nullsIndicatorTable, 2, "Columns", "Columns", record, &recordSize);
     rc = catalog->insertRecord((*tableHandle), tableDescriptor, record, rid);
     if (rc != SUCCESS)
@@ -161,7 +161,6 @@ RC RelationManager::createTable(const string &tableName, const vector<Attribute>
     {
         cerr << "Unable to create " << tableName << " file" << endl;
         return TABLE_FILE_ALR_EXISTS;
-
     }
     FileHandle handle;
     rc = catalog->openFile(tableName, handle);
@@ -242,7 +241,7 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
     RC rc = catalog->openFile(table, tableFileHandle);
     if (rc != SUCCESS)
     {
-        return -1;
+        return 2;
     }
 
     // Prepare to scan the Tables file
@@ -259,7 +258,7 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
     if (rc != SUCCESS)
     {
         catalog->closeFile(tableFileHandle);
-        return -1;
+        return 3;
     }
 
     // Use iterator to iterate through table file to find desired table
@@ -281,7 +280,7 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
     if (!found)
     {
         free(data);
-        return -1;
+        return 4;
     }
 
     // Access the Columns file
@@ -290,7 +289,7 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
     if (rc != SUCCESS)
     {
         free(data);
-        return -1;
+        return 5;
     }
 
     // Prepare to scan the Columns file
@@ -307,7 +306,7 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
     {
         catalog->closeFile(columnFileHandle);
         free(data);
-        return -1;
+        return 6;
     }
 
     // Iterates through Columns table and adds matched attributes corresponding to tableID
@@ -410,7 +409,7 @@ void RelationManager::prepareTableRecord(const int nameLength, const string &nam
 }
 
 void RelationManager::prepareColumnRecord(const int nameLength, const string &name, const int table_id, const string column_name, const int column_type,
-                         const int column_length, const int column_position, void *buffer, int *recordSize)
+                                          const int column_length, const int column_position, void *buffer, int *recordSize)
 {
     int offset = 0;
 
