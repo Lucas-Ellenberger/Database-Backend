@@ -512,15 +512,50 @@ RC RelationManager::deleteTuple(const string &tableName, const RID &rid)
         return CATALOG_DSN_EXIST;
     }
     return -1;
+
+    // Open file corresponding to the table name
+    FileHandle tableFileHandle;
+    RC rc = catalog->openFile(tableName, tableFileHandle);
+    if (rc != SUCCESS)
+    {
+        return rc;
+    }
+
+    vector<Attribute> recordDescriptor; // Empty recordDescriptor since deleteRecord doesn't use it
+
+    // Delete the record from the file
+    rc = catalog->deleteRecord(tableFileHandle, recordDescriptor, rid);
+    catalog->closeFile(tableFileHandle); // Always close the file handle regardless of the outcome
+
+    if (rc != SUCCESS)
+    {
+        return rc; // Return error if the deletion fails
+    }
+
+    return SUCCESS;
 }
 
 RC RelationManager::updateTuple(const string &tableName, const void *data, const RID &rid)
 {
-    if (catalog == NULL)
-    {
+    if (catalog == NULL) {
         return CATALOG_DSN_EXIST;
     }
-    return -1;
+    FileHandle handle;
+    RC rc = catalog->openFile(tableName, handle);
+    if (rc != SUCCESS) {
+        return rc; // Failed to open the file
+    }
+    vector<Attribute> recordDescriptor;
+    rc = catalog->getAttributes(tableName, recordDescriptor);
+    if (rc != SUCCESS) {
+        return rc; // Failed to open the file
+    }
+    rc = catalog->updateRecord(handle, recordDescriptor, rid, data);
+    if (rc != SUCCESS) {
+        return rc; // Failed to open the file
+    }
+    rc = catalog->closeFile(handle);
+    return rc;
 }
 
 RC RelationManager::readTuple(const string &tableName, const RID &rid, void *data)
@@ -539,6 +574,10 @@ RC RelationManager::readTuple(const string &tableName, const RID &rid, void *dat
         return rc; // Failed to open the file
     }
     rc = catalog->readRecord(handle, recordDescriptor, rid, data);
+    if (rc != SUCCESS) {
+        return rc; // Failed to open the file
+    }
+    rc = catalog->closeFile(handle);
     return rc;
 }
 
