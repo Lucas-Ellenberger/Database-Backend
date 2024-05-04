@@ -18,6 +18,7 @@ RelationManager *RelationManager::instance()
 
 RelationManager::RelationManager()
 {
+    RecordBasedFileManager *catalog = NULL;
 }
 
 RelationManager::~RelationManager()
@@ -32,6 +33,8 @@ RC RelationManager::createCatalog()
     // we do not have fixed length so we cannot store length.
     // we do not have any indexes so we will not store any information about indexes, same goes for constraints.
 
+    catalog = RecordBasedFileManager::instance();
+
     RC rc;
 
     rc = catalog->createFile("Tables");
@@ -40,6 +43,7 @@ RC RelationManager::createCatalog()
         cerr << "Unable to create Tables file" << endl;
     }
     rc = catalog->openFile("Tables", (*tableHandle));
+
     if (rc != SUCCESS)
     {
         cerr << "Unable to open Tables file" << endl;
@@ -62,10 +66,12 @@ RC RelationManager::createCatalog()
 
     prepareTableRecord(tableDescriptor.size(), nullsIndicatorTableString, 1, "Tables", "Tables", record, &recordSize); // not sure we actually need recordSize
     rc = catalog->insertRecord((*tableHandle), tableDescriptor, record, rid);
+
     if (rc != SUCCESS)
     {
         cerr << "Unable to insert \"Table\" record into table Table" << endl;
     }
+  
     prepareTableRecord(tableDescriptor.size(), nullsIndicatorTable, 2, "Columns", "Columns", record, &recordSize);
     rc = catalog->insertRecord((*tableHandle), tableDescriptor, record, rid);
     if (rc != SUCCESS)
@@ -79,6 +85,7 @@ RC RelationManager::createCatalog()
     {
         cerr << "Unable to create Columns file" << endl;
     }
+
     rc = catalog->openFile("Columns", (*this->columnHandle));
     if (rc != SUCCESS)
     {
@@ -154,6 +161,7 @@ RC RelationManager::createTable(const string &tableName, const vector<Attribute>
     {
         cerr << "Unable to create " << tableName << " file" << endl;
         return TABLE_FILE_ALR_EXISTS;
+
     }
     FileHandle handle;
     rc = catalog->openFile(tableName, handle);

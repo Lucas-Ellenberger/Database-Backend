@@ -12,6 +12,7 @@ using namespace std;
 # define RM_EOF (-1)  // end of a scan operator
 # define CATALOG_DSN_EXIST 1
 # define TABLE_FILE_ALR_EXISTS 2
+# define TB_DN_EXIST 1
 
 // RM_ScanIterator is an iteratr to go through tuples
 class RM_ScanIterator {
