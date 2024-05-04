@@ -220,7 +220,8 @@ private:
   bool intCompare(int *compare);
   bool floatCompare(float *compare);
   bool stringCompare(char *compare, uint32_t length);
-  bool setFieldNull(char *nullIndicator, int fieldnum);
+  bool setFieldNull(char *nullIndicator, int fieldNum);
+  unsigned getAttributeSize(const void *attributePtr, const Attribute &attribute);
   RC formatRecord(void *data, const vector<Attribute> &recordDescriptor, const vector<string> &attributeNames);
 };
 

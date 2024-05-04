@@ -1106,45 +1106,84 @@ RC RBFM_ScanIterator::formatRecord(void *data, const vector<Attribute> &recordDe
 // Record to be formatted is expected to be in *data
 {
     // Size of nullindicators and starting offset of field data
-    unsigned dataOffset = int(ceil((double)attributeNames.size() / CHAR_BIT));
-    unsigned recordOffset = int(ceil((double)recordDescriptor.size() / CHAR_BIT));
+    unsigned outputNullIndicatorSize = rbfm->getNullIndicatorSize(attributeNames.size());
+    unsigned inputNullIndicatorSize = rbfm->getNullIndicatorSize(recordDescriptor.size());
 
     char *tempBuffer = (char *)malloc(PAGE_SIZE); // Temp buffer to store formatted record
-    memset(tempBuffer, 0, PAGE_SIZE);             // Set to 0 for safety
+    memset(tempBuffer, 0, PAGE_SIZE);
 
-    char* newNullIndicator = (char*)malloc(dataOffset); // NullIndicator for formatted record
-    memset(newNullIndicator, 0, dataOffset); // Again, set 0 for safety
+    char *newNullIndicator = (char *)malloc(outputNullIndicatorSize); // NullIndicator for formatted record
+    memset(newNullIndicator, 0, outputNullIndicatorSize);             // default 0 for nullIndicator
 
-    char* dataPtr = (char*)data;  // Char pointer to data
+    char *dataPtr = (char *)data; // Char pointer to data
+    unsigned formattedRecordOffset = outputNullIndicatorSize;
+    unsigned recordOffset = inputNullIndicatorSize;
 
     // Process each attribute in attributeNames
-    for (unsigned i = 0; i < attributeNames.size(); ++i) { // Loop for each requested attribute
+    for (unsigned i = 0; i < attributeNames.size(); ++i)
+    { // Loop for each requested attribute
         bool found = false;
-        for (unsigned j = 0; j < recordDescriptor.size(); ++j) { // Loop for each field in record
-            if (recordDescriptor[j].name == attributeNames[i]) { // Has to check if field name match since we don't know the ordering in attributeNames
-                if (fieldIsNull(dataPtr, j)) {
+        unsigned recordOffset = inputNullIndicatorSize;        // Resets the offset to the beginning of the record
+        for (unsigned j = 0; j < recordDescriptor.size(); ++j) // Loop for each field in record
+        {
+            unsigned attributeSize = getAttributeSize(dataPtr + recordOffset, recordDescriptor[j]); // Returns the size of the attribute type
+
+            if (recordDescriptor[j].name == attributeNames[i]) // Has to check if field name match since we don't know the ordering in attributeNames
+            {
+                if (rbfm->fieldIsNull(dataPtr, j)) // If null flag is found, set null in new nullIndicator
+                {
                     setFieldNull(newNullIndicator, i);
-                } else {
-                    unsigned attributeSize = getAttributeSize(dataPtr + recordOffset, recordDescriptor[j]);
-                    memcpy(tempBuffer + dataOffset, dataPtr + recordOffset, attributeSize);
-                    dataOffset += attributeSize;
                 }
-                recordOffset += getAttributeSize(dataPtr + recordOffset, recordDescriptor[j]);
+                else
+                {
+                    memcpy(tempBuffer + formattedRecordOffset, dataPtr + recordOffset, attributeSize); // Copys attribute data into formatted record
+                    formattedRecordOffset += attributeSize;
+                }
                 found = true;
-                break;
             }
+            recordOffset += attributeSize;
+            if (found)
+                break;
         }
-        if (!found) {
+        if (!found)
+        {
             setFieldNull(newNullIndicator, i);
         }
     }
+    // Copy the new null indicator and formatted data back to the original data buffer
+    memcpy(dataPtr, newNullIndicator, outputNullIndicatorSize);
+    memcpy(dataPtr + outputNullIndicatorSize, tempBuffer + outputNullIndicatorSize, formattedRecordOffset - outputNullIndicatorSize);
+    free(tempBuffer);
+    free(newNullIndicator);
+    return SUCCESS;
 }
 
-bool setFieldNull(char *nullIndicator, int fieldNum){
-    int byteIndex = fieldNum / 8;  // Finds the byte of the n'th field
-    int bitPosition = fieldNum % 8;  // Find the bit position within that byte
-    nullIndicator[byteIndex] |= (1 << (7 - bitPosition));  // Set the bit to 1
+bool setFieldNull(char *nullIndicator, int fieldNum)
+{
+    int byteIndex = fieldNum / 8;                         // Finds the byte of the n'th field
+    int bitPosition = fieldNum % 8;                       // Find the bit position within that byte
+    nullIndicator[byteIndex] |= (1 << (7 - bitPosition)); // Set the bit to 1
 }
 
+unsigned getAttributeSize(const void *attributePtr, const Attribute &attribute)
+{
+    switch (attribute.type)
+    {
+    case TypeInt:
+        return INT_SIZE; // Assuming int is 32-bit
 
+    case TypeReal:
+        return REAL_SIZE; // Typically 32-bit
 
+    case TypeVarChar:
+        // For VarChar, read the length from the data.
+        // Using uint32_t for length ensures consistency across platforms.
+        uint32_t length;
+        memcpy(&length, attributePtr, VARCHAR_LENGTH_SIZE); // More specific than unsigned
+        return VARCHAR_LENGTH_SIZE + length;                // Length of the string plus size of the length field itself
+
+    default:
+        // Ideally handle unknown types or add more types as needed
+        return 0;
+    }
+}
