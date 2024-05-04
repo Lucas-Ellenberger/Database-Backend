@@ -41,12 +41,14 @@ RC RelationManager::createCatalog()
     if (rc != SUCCESS)
     {
         cerr << "Unable to create Tables file" << endl;
+        return rc;
     }
     rc = catalog->openFile("Tables", (*tableHandle));
 
     if (rc != SUCCESS)
     {
         cerr << "Unable to open Tables file" << endl;
+        return rc;
     }
 
     // create "tables" table
@@ -70,6 +72,7 @@ RC RelationManager::createCatalog()
     if (rc != SUCCESS)
     {
         cerr << "Unable to insert \"Table\" record into table Table" << endl;
+        return rc;
     }
 
     prepareTableRecord(tableDescriptor.size(), nullsIndicatorTable, 2, "Columns", "Columns", record, &recordSize);
@@ -77,6 +80,7 @@ RC RelationManager::createCatalog()
     if (rc != SUCCESS)
     {
         cerr << "Unable to insert \"Column\" record into table Table" << endl;
+        return rc;
     }
 
     FileHandle columnHandle;
@@ -84,12 +88,14 @@ RC RelationManager::createCatalog()
     if (rc != SUCCESS)
     {
         cerr << "Unable to create Columns file" << endl;
+        return rc;
     }
 
     rc = catalog->openFile("Columns", (*this->columnHandle));
     if (rc != SUCCESS)
     {
         cerr << "Unable to open Columns file" << endl;
+        return rc;
     }
 
     // create "columns" table
@@ -114,6 +120,7 @@ RC RelationManager::createCatalog()
         if (rc != SUCCESS)
         {
             cerr << "Unable to insert \"Table\" record number " << i << " into table Column" << endl;
+            return rc;
         }
     }
 
@@ -127,6 +134,7 @@ RC RelationManager::createCatalog()
         if (rc != SUCCESS)
         {
             cerr << "Unable to insert \"Table\" record number " << i << " into table Column" << endl;
+            return rc;
         }
     }
     table_id_count = 3;
@@ -167,6 +175,7 @@ RC RelationManager::createTable(const string &tableName, const vector<Attribute>
     if (rc != SUCCESS)
     {
         cerr << "Unable to open " << tableName << " file" << endl;
+        return rc;
     }
 
     // prep variables for record
@@ -198,6 +207,7 @@ RC RelationManager::createTable(const string &tableName, const vector<Attribute>
     if (rc != SUCCESS)
     {
         cerr << "Unable to insert " << tableName << " record into table Table" << endl;
+        return rc;
     }
 
     int num_attrs = attrs.size();
@@ -208,6 +218,7 @@ RC RelationManager::createTable(const string &tableName, const vector<Attribute>
         if (rc != SUCCESS)
         {
             cerr << "Unable to insert " << tableName << " record number " << i << " into table Column" << endl;
+            return rc;
         }
     }
 
@@ -241,7 +252,7 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
     RC rc = catalog->openFile(table, tableFileHandle);
     if (rc != SUCCESS)
     {
-        return 2;
+        return rc;
     }
 
     // Prepare to scan the Tables file
