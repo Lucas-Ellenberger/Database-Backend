@@ -234,9 +234,137 @@ RC RelationManager::deleteTable(const string &tableName)
 {
     // go into Tables table, find table with name tableName, get its table-id, delete that record
     // go into Columns table, find all records with matching table-id, and delete all of them.
+    
+    // Check if catalog has been created
+    if (catalog == NULL)
+    {
+        return CATALOG_DSN_EXIST;
+    }
 
-    catalog->destroyFile(tableName);
-    return -1;
+    // Check if table file exists
+    FileHandle tableFileHandle;
+    RC rc = catalog->openFile(table, tableFileHandle);
+    if (rc != SUCCESS)
+    {
+        return rc;
+    }
+
+    // Prepare to scan the Tables file
+    RBFM_ScanIterator tablesScanIterator;
+    vector<string> tablesAttributesToRead = {"table-id", "table-name"};
+    vector<Attribute> tableDescriptor;
+    createTableRecordDescriptor(tableDescriptor);
+    string conditionAttribute = "table-name";
+    CompOp compOp = EQ_OP;
+    void *value = (void *)tableName.c_str();
+
+    // Create scan iterator
+    rc = catalog->scan(tableFileHandle, tableDescriptor, conditionAttribute, compOp, value, tablesAttributesToRead, tablesScanIterator);
+    if (rc != SUCCESS)
+    {
+        catalog->closeFile(tableFileHandle);
+        return 3;
+    }
+
+    // Use iterator to iterate through table file to find desired table
+    RID rid;
+    void *data = malloc(PAGE_SIZE);
+    int tableID = -1;
+    bool found = false;
+    while (tablesScanIterator.getNextRecord(rid, data) != RBFM_EOF)
+    {
+        int offset = int(ceil((double)tablesAttributesToRead.size() / CHAR_BIT)); // Have to account for empty nullIndicator
+        // the above function will work, but it will fail 
+        memcpy(&tableID, (char *)data + offset, sizeof(int));              // Grabs tableID
+        found = true;
+        break; // Assuming table names are unique, we can break after the first match
+    }
+    tablesScanIterator.close();
+    catalog->closeFile(tableFileHandle);
+
+    // If table does not exist
+    if (!found)
+    {
+        free(data);
+        return 4;
+    }
+
+    //now we have the RID for the tuple for this table in the Tables table, and we need to use the table-id to delete everything out of the columns table
+    // use the RID to delete the tuple out of the Tables table
+
+    rc = deleteTuple("Tables", rid);
+    if (rc != SUCCESS) {
+        free(data);
+        return 10;
+    }
+
+
+
+
+
+    // Access the Columns file
+    FileHandle columnFileHandle;
+    rc = catalog->openFile("Columns", columnFileHandle);
+    if (rc != SUCCESS)
+    {
+        free(data);
+        return 5;
+    }
+
+    // Prepare to scan the Columns file
+    vector<string> columnsAttributesToRead = {"table-id", "column-name"};
+    vector<Attribute> columnDescriptor;
+    createColumnRecordDescriptor(columnDescriptor);
+    RBFM_ScanIterator columnsScanIterator;
+    int tableIdValue = tableID;
+    value = &tableIdValue;
+
+    // Create scan iterator
+    rc = catalog->scan(columnFileHandle, columnDescriptor, "table-id", compOp, value, columnsAttributesToRead, columnsScanIterator);
+    if (rc != SUCCESS)
+    {
+        catalog->closeFile(columnFileHandle);
+        free(data);
+        return 6;
+    }
+
+    // Iterates through Columns table and adds matched attributes corresponding to tableID
+    Attribute attr;
+    vector<RID> column_rids_to_delete;
+    while (columnsScanIterator.getNextRecord(rid, data) != RBFM_EOF)
+    {
+        int offset = int(ceil((double)columnDescriptor.size() / CHAR_BIT)); // Offset accounting for empty nullindicator
+        RID rid_temp;
+        rid_temp.length = rid.length;
+        rid_temp.offset = rid.offset;
+        column_rids_to_delete.push_back(rid);
+        //no values inside the tuples should matter, i just need to delete them, lets create a vector of RIDs
+
+        
+    }
+    columnsScanIterator.close();
+    catalog->closeFile(columnFileHandle);
+
+    //loop through all stored RIDs in the Columns table that need to be deleted and delete them
+    for (int i = 0; i < column_rids_to_delete.size(), i += 1){
+        rc = deleteTuple(column_rids_to_delete[i], "Columns");
+        if (rc != SUCCESS) {
+            free(data);
+            return 11;
+        }
+    }
+
+
+    free(data);
+    return 0;
+
+    // delete the actual table itself (no tuples need to be deleted since we're just destroying the file itself)
+    rc = catalog->destroyFile(tableName);
+    if (rc != SUCCESS) {
+        free(data);
+        return 12;
+    }
+    return SUCCESS;
 }
 
 RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &attrs)
@@ -279,7 +407,7 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
     bool found = false;
     while (tablesScanIterator.getNextRecord(rid, data) != RBFM_EOF)
     {
-        int offset = int(ceil((double)tableDescriptor.size() / CHAR_BIT)); // Have to account for empty nullIndicator
+        int offset = int(ceil((double)tablesAttributesToRead.size() / CHAR_BIT)); // Have to account for empty nullIndicator
         memcpy(&tableID, (char *)data + offset, sizeof(int));              // Grabs tableID
         found = true;
         break; // Assuming table names are unique, we can break after the first match
@@ -412,7 +540,27 @@ RC RelationManager::printTuple(const vector<Attribute> &attrs, const void *data)
 
 RC RelationManager::readAttribute(const string &tableName, const RID &rid, const string &attributeName, void *data)
 {
-    return -1;
+    if (catalog == NULL)
+    {
+        return CATALOG_DSN_EXIST;
+    }
+
+    // Check if table file exists
+    FileHandle handle;
+    RC rc = catalog->openFile(table, handle);
+    if (rc != SUCCESS)
+    {
+        return rc;
+    }
+
+    vector<Attribute> recordDescriptor;
+    rc = getAttributes(tableName, recordDescriptor);
+    if (rc != SUCCESS)
+    {
+        return rc;
+    }
+    rc = catalog->readAttribute(handle, recordDescriptor, rid, attributeName, data);
+    return rc;
 }
 
 RC RelationManager::scan(const string &tableName,
