@@ -1141,13 +1141,9 @@ RC RBFM_ScanIterator::formatRecord(void *data, const vector<Attribute> &recordDe
                 }
                 found = true;
             }
-            recordOffset += attributeSize;
-            if (found)
+            recordOffset += attributeSize; // Record offset is increased to stay consistent with loop
+            if (found)                     // If attribute is found, we break to start looking for next attribute
                 break;
-        }
-        if (!found)
-        {
-            setFieldNull(newNullIndicator, i);
         }
     }
     // Copy the new null indicator and formatted data back to the original data buffer
