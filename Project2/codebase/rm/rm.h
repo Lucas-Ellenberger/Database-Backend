@@ -9,28 +9,28 @@
 
 using namespace std;
 
-# define RM_EOF (-1)  // end of a scan operator
-# define CATALOG_DSN_EXIST 1
-# define TABLE_FILE_ALR_EXISTS 2
-# define TB_DN_EXIST 1
+#define RM_EOF (-1) // end of a scan operator
+#define CATALOG_DSN_EXIST 1
+#define TABLE_FILE_ALR_EXISTS 2
+#define TB_DN_EXIST 1
 
 // RM_ScanIterator is an iteratr to go through tuples
-class RM_ScanIterator {
+class RM_ScanIterator
+{
 public:
-  RM_ScanIterator() {};
-  ~RM_ScanIterator() {};
+  RM_ScanIterator(){};
+  ~RM_ScanIterator(){};
 
   // "data" follows the same format as RelationManager::insertTuple()
   RC getNextTuple(RID &rid, void *data) { return RM_EOF; };
   RC close() { return -1; };
 };
 
-
 // Relation Manager
 class RelationManager
 {
 public:
-  static RelationManager* instance();
+  static RelationManager *instance();
 
   RC createCatalog();
 
@@ -59,11 +59,11 @@ public:
   // Scan returns an iterator to allow the caller to go through the results one by one.
   // Do not store entire results in the scan iterator.
   RC scan(const string &tableName,
-      const string &conditionAttribute,
-      const CompOp compOp,                  // comparison type such as "<" and "="
-      const void *value,                    // used in the comparison
-      const vector<string> &attributeNames, // a list of projected attributes
-      RM_ScanIterator &rm_ScanIterator);
+          const string &conditionAttribute,
+          const CompOp compOp,                  // comparison type such as "<" and "="
+          const void *value,                    // used in the comparison
+          const vector<string> &attributeNames, // a list of projected attributes
+          RM_ScanIterator &rm_ScanIterator);
 
   void prepareTableRecord(const int nameLength, const string &name, const int table_id, const string &table_name, const string &file_name, void *buffer, int *recordSize);
 
@@ -73,6 +73,7 @@ public:
   void createTableRecordDescriptor(vector<Attribute> &recordDescriptor);
 
   void createColumnRecordDescriptor(vector<Attribute> &recordDescriptor);
+
 protected:
   RelationManager();
   ~RelationManager();
@@ -83,6 +84,8 @@ private:
   FileHandle *tableHandle = NULL;
   FileHandle *columnHandle = NULL;
   uint32_t table_id_count = 0;
+  RC findTableFileName(const string &tableName, RecordBasedFileManager *rbfm, FileHandle &tableFileHandle,
+                       const vector<Attribute> &tableDescriptor, string &fileName);
 };
 
 #endif
