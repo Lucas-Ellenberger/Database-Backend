@@ -370,21 +370,30 @@ RC RelationManager::insertTuple(const string &tableName, const void *data, RID &
         return rc;
     }
 
-    rc = findTableFileName(tableName, catalog, fileHandle, tableDescriptor, fileName); 
-    catalog->closeFile(fileHandle);                                                    
+    rc = findTableFileName(tableName, catalog, fileHandle, tableDescriptor, fileName);
+    catalog->closeFile(fileHandle);
     if (rc != SUCCESS)
     {
         return TB_DN_EXIST;
     }*/
 
-    FileHandle tableFileHandle; 
+    FileHandle tableFileHandle;
     RC rc = catalog->openFile(tableName, tableFileHandle);
     if (rc != SUCCESS)
     {
         return rc; // Failed to open the file
     }
 
-    return -1;
+    vector<Attribute> attrs;
+    getAttributes(tableName, attrs);
+
+    rc = catalog->insertRecord(tableFileHandle, attrs, data, rid);
+    catalog->closeFile(tableFileHandle);
+    if (rc != SUCCESS)
+    {
+        return rc; // Return error if the insertion fails
+    }
+    return SUCCESS;
 }
 
 RC RelationManager::deleteTuple(const string &tableName, const RID &rid)
