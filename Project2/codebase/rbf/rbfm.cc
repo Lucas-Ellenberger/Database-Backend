@@ -1121,7 +1121,7 @@ RC RBFM_ScanIterator::formatRecord(void *data, const vector<Attribute> &recordDe
 
     // Process each attribute in attributeNames
     for (unsigned i = 0; i < attributeNames.size(); ++i)
-    { // Loop for each requested attribute
+    {
         bool found = false;
         unsigned recordOffset = inputNullIndicatorSize;        // Resets the offset to the beginning of the record
         for (unsigned j = 0; j < recordDescriptor.size(); ++j) // Loop for each field in record
@@ -1166,20 +1166,18 @@ unsigned getAttributeSize(const void *attributePtr, const Attribute &attribute)
     switch (attribute.type)
     {
     case TypeInt:
-        return INT_SIZE; // Assuming int is 32-bit
+        return INT_SIZE;
 
     case TypeReal:
-        return REAL_SIZE; // Typically 32-bit
+        return REAL_SIZE;
 
     case TypeVarChar:
         // For VarChar, read the length from the data.
-        // Using uint32_t for length ensures consistency across platforms.
         uint32_t length;
-        memcpy(&length, attributePtr, VARCHAR_LENGTH_SIZE); // More specific than unsigned
-        return VARCHAR_LENGTH_SIZE + length;                // Length of the string plus size of the length field itself
+        memcpy(&length, attributePtr, VARCHAR_LENGTH_SIZE);
+        return VARCHAR_LENGTH_SIZE + length; // Length of the string plus size of the length field itself
 
     default:
-        // Ideally handle unknown types or add more types as needed
         return 0;
     }
 }
