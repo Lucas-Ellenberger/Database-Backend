@@ -287,7 +287,7 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
         return -1;
     }
 
-    // Iterates through Columns table and adds matched attributes coressponding to tableID
+    // Iterates through Columns table and adds matched attributes corresponding to tableID
     Attribute attr;
     while (columnsScanIterator.getNextRecord(rid, data) != RBFM_EOF)
     {
