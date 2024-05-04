@@ -24,6 +24,7 @@ public:
   // "data" follows the same format as RelationManager::insertTuple()
   RC getNextTuple(RID &rid, void *data) { return RM_EOF; };
   RC close() { return -1; };
+  FileHandle rm_scan_handle;
 };
 
 // Relation Manager
@@ -75,6 +76,8 @@ public:
   void createTableRecordDescriptor(vector<Attribute> &recordDescriptor);
 
   void createColumnRecordDescriptor(vector<Attribute> &recordDescriptor);
+
+  friend class RM_ScanIterator;
 
 protected:
   RelationManager();
