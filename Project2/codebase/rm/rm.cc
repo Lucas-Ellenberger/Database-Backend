@@ -38,11 +38,14 @@ RC RelationManager::createCatalog()
     if (rc != SUCCESS)
     {
         cerr << "Unable to create Tables file" << endl;
+        return rc;
     }
-    rc = catalog->openFile("Tables", (*tableHandle));
+    rc = catalog->openFile("Tables", tableHandle);
+
     if (rc != SUCCESS)
     {
         cerr << "Unable to open Tables file" << endl;
+        return rc;
     }
 
     // create "tables" table
@@ -50,27 +53,30 @@ RC RelationManager::createCatalog()
     createTableRecordDescriptor(tableDescriptor);
     // despite no fields ever being null, we will create the nulls indicator
     int tableNullFieldsIndicatorActualSize = ceil((double)tableDescriptor.size() / CHAR_BIT);
-    char nullsIndicatorTable[tableNullFieldsIndicatorActualSize];
+    unsigned char nullsIndicatorTable[tableNullFieldsIndicatorActualSize];
     memset(nullsIndicatorTable, 0, tableNullFieldsIndicatorActualSize);
-    string nullsIndicatorTableString(nullsIndicatorTable);
 
     // now create records
     RID rid;
     int recordSize = 0;
-    void *record = malloc(100);
+    void *record = malloc(200);
     void *returnedData = malloc(100);
 
-    prepareTableRecord(tableDescriptor.size(), nullsIndicatorTableString, 1, "Tables", "Tables", record, &recordSize); // not sure we actually need recordSize
-    rc = catalog->insertRecord((*tableHandle), tableDescriptor, record, rid);
+    prepareTableRecord(tableDescriptor.size(), nullsIndicatorTable, 1, 6, "Tables", 6, "Tables", record, &recordSize); // not sure we actually need recordSize
+    rc = catalog->insertRecord(tableHandle, tableDescriptor, record, rid);
+
     if (rc != SUCCESS)
     {
         cerr << "Unable to insert \"Table\" record into table Table" << endl;
+        return rc;
     }
-    prepareTableRecord(tableDescriptor.size(), nullsIndicatorTable, 2, "Columns", "Columns", record, &recordSize);
-    rc = catalog->insertRecord((*tableHandle), tableDescriptor, record, rid);
+
+    prepareTableRecord(tableDescriptor.size(), nullsIndicatorTable, 2, 7, "Columns", 7, "Columns", record, &recordSize);
+    rc = catalog->insertRecord(tableHandle, tableDescriptor, record, rid);
     if (rc != SUCCESS)
     {
         cerr << "Unable to insert \"Column\" record into table Table" << endl;
+        return rc;
     }
 
     FileHandle columnHandle;
@@ -78,11 +84,14 @@ RC RelationManager::createCatalog()
     if (rc != SUCCESS)
     {
         cerr << "Unable to create Columns file" << endl;
+        return rc;
     }
-    rc = catalog->openFile("Columns", (*this->columnHandle));
+
+    rc = catalog->openFile("Columns", columnHandle);
     if (rc != SUCCESS)
     {
         cerr << "Unable to open Columns file" << endl;
+        return rc;
     }
 
     // create "columns" table
@@ -90,9 +99,8 @@ RC RelationManager::createCatalog()
     createColumnRecordDescriptor(columnDescriptor);
     // despite no fields ever being null, we will create the nulls indicator
     int columnNullFieldsIndicatorActualSize = ceil((double)columnDescriptor.size() / CHAR_BIT);
-    char nullsIndicatorColumn[columnNullFieldsIndicatorActualSize];
+    unsigned char nullsIndicatorColumn[columnNullFieldsIndicatorActualSize];
     memset(nullsIndicatorColumn, 0, columnNullFieldsIndicatorActualSize);
-    string nullsIndicatorColumnString(nullsIndicatorColumn);
 
     // now create records
     recordSize = 0;
@@ -102,11 +110,12 @@ RC RelationManager::createCatalog()
     int table_size[3] = {4, 50, 50};
     for (int i = 0; i < 3; i += 1)
     {
-        prepareColumnRecord(columnDescriptor.size(), nullsIndicatorColumnString, 1, table_names[i], table_types[i], table_size[i], i + 1, record, &recordSize); // not sure we actually need recordSize
+        prepareColumnRecord(columnDescriptor.size(), nullsIndicatorColumn, 1, table_names[i].size(), table_names[i], table_types[i], table_size[i], i + 1, record, &recordSize); // not sure we actually need recordSize
         rc = catalog->insertRecord(columnHandle, columnDescriptor, record, rid);
         if (rc != SUCCESS)
         {
             cerr << "Unable to insert \"Table\" record number " << i << " into table Column" << endl;
+            return rc;
         }
     }
 
@@ -115,18 +124,22 @@ RC RelationManager::createCatalog()
     int column_size[5] = {4, 50, 4, 4, 4};
     for (int i = 0; i < 5; i += 1)
     {
-        prepareColumnRecord(columnDescriptor.size(), nullsIndicatorColumnString, 2, column_names[i], column_types[i], column_size[i], i + 1, record, &recordSize); // not sure we actually need recordSize
+        prepareColumnRecord(columnDescriptor.size(), nullsIndicatorColumn, 2, column_names[i].size(), column_names[i], column_types[i], column_size[i], i + 1, record, &recordSize); // not sure we actually need recordSize
         rc = catalog->insertRecord(columnHandle, columnDescriptor, record, rid);
         if (rc != SUCCESS)
         {
             cerr << "Unable to insert \"Table\" record number " << i << " into table Column" << endl;
+            return rc;
         }
     }
     table_id_count = 3;
-    free(nullsIndicatorTable);
-    free(nullsIndicatorColumn);
+    /* free(nullsIndicatorTable); */
+    /* free(nullsIndicatorColumn); */
     free(record);
     free(returnedData);
+
+    catalog->closeFile(tableHandle);
+    catalog->closeFile(columnHandle);
 
     // After opening these files, I do not close them. I do not know if this the expected behavior or if I should close them
     return SUCCESS;
@@ -137,8 +150,8 @@ RC RelationManager::deleteCatalog()
     if (catalog == NULL)
         return CATALOG_DSN_EXIST;
 
-    catalog->closeFile(*tableHandle);
-    catalog->closeFile(*columnHandle);
+    catalog->closeFile(tableHandle);
+    catalog->closeFile(columnHandle);
     catalog->destroyFile("Tables");
     catalog->destroyFile("Columns");
 
@@ -160,6 +173,7 @@ RC RelationManager::createTable(const string &tableName, const vector<Attribute>
     if (rc != SUCCESS)
     {
         cerr << "Unable to open " << tableName << " file" << endl;
+        return rc;
     }
 
     // prep variables for record
@@ -173,34 +187,34 @@ RC RelationManager::createTable(const string &tableName, const vector<Attribute>
     createTableRecordDescriptor(tableDescriptor);
     // despite no fields ever being null, we will create the nulls indicator
     int tableNullFieldsIndicatorActualSize = ceil((double)tableDescriptor.size() / CHAR_BIT);
-    char nullsIndicatorTable[tableNullFieldsIndicatorActualSize];
+    unsigned char nullsIndicatorTable[tableNullFieldsIndicatorActualSize];
     memset(nullsIndicatorTable, 0, tableNullFieldsIndicatorActualSize);
-    string nullsIndicatorTableString(nullsIndicatorTable);
 
     // create "columns" table
     vector<Attribute> columnDescriptor;
     createColumnRecordDescriptor(columnDescriptor);
     // despite no fields ever being null, we will create the nulls indicator
     int columnNullFieldsIndicatorActualSize = ceil((double)columnDescriptor.size() / CHAR_BIT);
-    char nullsIndicatorColumn[columnNullFieldsIndicatorActualSize];
+    unsigned char nullsIndicatorColumn[columnNullFieldsIndicatorActualSize];
     memset(nullsIndicatorColumn, 0, columnNullFieldsIndicatorActualSize);
-    string nullsIndicatorColumnString(nullsIndicatorColumn);
 
-    prepareTableRecord(tableDescriptor.size(), nullsIndicatorTableString, table_id_count, tableName, tableName, record, &recordSize);
+    prepareTableRecord(tableDescriptor.size(), nullsIndicatorTable, table_id_count, tableName.size(), tableName, tableName.size(), tableName, record, &recordSize);
     rc = catalog->insertRecord(handle, tableDescriptor, record, rid);
     if (rc != SUCCESS)
     {
         cerr << "Unable to insert " << tableName << " record into table Table" << endl;
+        return rc;
     }
 
     int num_attrs = attrs.size();
     for (int i = 0; i < num_attrs; i += 1)
     {
-        prepareColumnRecord(columnDescriptor.size(), nullsIndicatorColumnString, 2, attrs[i].name, attrs[i].type, attrs[i].length, i + 1, record, &recordSize); // not sure we actually need recordSize
-        rc = catalog->insertRecord(*columnHandle, columnDescriptor, record, rid);
+        prepareColumnRecord(columnDescriptor.size(), nullsIndicatorColumn, 2, attrs[i].name.size(), attrs[i].name, attrs[i].type, attrs[i].length, i + 1, record, &recordSize); // not sure we actually need recordSize
+        rc = catalog->insertRecord(columnHandle, columnDescriptor, record, rid);
         if (rc != SUCCESS)
         {
             cerr << "Unable to insert " << tableName << " record number " << i << " into table Column" << endl;
+            return rc;
         }
     }
 
@@ -234,7 +248,7 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
     RC rc = catalog->openFile(table, tableFileHandle);
     if (rc != SUCCESS)
     {
-        return -1;
+        return rc;
     }
 
     // Prepare to scan the Tables file
@@ -251,7 +265,7 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
     if (rc != SUCCESS)
     {
         catalog->closeFile(tableFileHandle);
-        return -1;
+        return 3;
     }
 
     // Use iterator to iterate through table file to find desired table
@@ -273,7 +287,7 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
     if (!found)
     {
         free(data);
-        return -1;
+        return 4;
     }
 
     // Access the Columns file
@@ -282,7 +296,7 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
     if (rc != SUCCESS)
     {
         free(data);
-        return -1;
+        return 5;
     }
 
     // Prepare to scan the Columns file
@@ -299,7 +313,7 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
     {
         catalog->closeFile(columnFileHandle);
         free(data);
-        return -1;
+        return 6;
     }
 
     // Iterates through Columns table and adds matched attributes corresponding to tableID
@@ -380,42 +394,47 @@ RC RelationManager::scan(const string &tableName,
 }
 
 // nameLength: size of record descriptor
-void RelationManager::prepareTableRecord(const int nameLength, const string &name, const int table_id, const string &table_name, const string &file_name, void *buffer, int *recordSize)
+void RelationManager::prepareTableRecord(const int fieldCount, unsigned char *nullFieldsIndicator, const int table_id, const int tableNameLength, 
+        const string &table_name, const int fileNameLength, const string &file_name, void *buffer, int *recordSize)
 {
     int offset = 0;
+    int nullFieldsIndicatorSize = ceil((double) fieldCount / CHAR_BIT);
 
-    memcpy((char *)buffer + offset, &nameLength, sizeof(int));
-    offset += sizeof(int);
-    memcpy((char *)buffer + offset, name.c_str(), nameLength);
-    offset += nameLength;
+    memcpy((char *)buffer + offset, nullFieldsIndicator, nullFieldsIndicatorSize);
+    offset += nullFieldsIndicatorSize;
 
     memcpy((char *)buffer + offset, &table_id, sizeof(int));
     offset += sizeof(int);
 
-    memcpy((char *)buffer + offset, table_name.c_str(), table_name.size() + 1); // plus 1 for null terminator
-    offset += table_name.size() + 1;
+    memcpy((char *)buffer + offset, &tableNameLength, sizeof(int));
+    offset += sizeof(int);
+    memcpy((char *)buffer + offset, table_name.c_str(), tableNameLength); // plus 1 for null terminator
+    offset += tableNameLength;
 
-    memcpy((char *)buffer + offset, file_name.c_str(), file_name.size() + 1); // plus 1 for null terminator
-    offset += file_name.size() + 1;
+    memcpy((char *)buffer + offset, &fileNameLength, sizeof(int));
+    offset += sizeof(int);
+    memcpy((char *)buffer + offset, file_name.c_str(), fileNameLength); // plus 1 for null terminator
+    offset += fileNameLength;
 
     *recordSize = offset;
 }
 
-void RelationManager::prepareColumnRecord(const int nameLength, const string &name, const int table_id, const string column_name, const int column_type,
-                         const int column_length, const int column_position, void *buffer, int *recordSize)
+void RelationManager::prepareColumnRecord(const int fieldCount, unsigned char *nullFieldsIndicator, const int table_id, const int columnNameLength,
+        const string &column_name, const int column_type, const int column_length, const int column_position, void *buffer, int *recordSize)
 {
     int offset = 0;
+    int nullFieldsIndicatorSize = ceil((double) fieldCount / CHAR_BIT);
 
-    memcpy((char *)buffer + offset, &nameLength, sizeof(int));
-    offset += sizeof(int);
-    memcpy((char *)buffer + offset, name.c_str(), nameLength);
-    offset += nameLength;
+    memcpy((char *)buffer + offset, nullFieldsIndicator, nullFieldsIndicatorSize);
+    offset += nullFieldsIndicatorSize;
 
     memcpy((char *)buffer + offset, &table_id, sizeof(int));
     offset += sizeof(int);
 
-    memcpy((char *)buffer + offset, column_name.c_str(), column_name.size() + 1);
-    offset += column_name.size() + 1;
+    memcpy((char *)buffer + offset, &columnNameLength, sizeof(int));
+    offset += sizeof(int);
+    memcpy((char *)buffer + offset, column_name.c_str(), columnNameLength);
+    offset += columnNameLength;
 
     memcpy((char *)buffer + offset, &column_type, sizeof(int));
     offset += sizeof(int);
