@@ -358,25 +358,6 @@ RC RelationManager::insertTuple(const string &tableName, const void *data, RID &
         return CATALOG_DSN_EXIST;
     }
 
-    /*// Prepare arguments to call findTableFileName
-    FileHandle fileHandle;
-    vector<Attribute> tableDescriptor;
-    createTableRecordDescriptor(tableDescriptor);
-    string fileName;
-
-    RC rc = catalog->openFile("Tables", fileHandle);
-    if (rc != SUCCESS)
-    {
-        return rc;
-    }
-
-    rc = findTableFileName(tableName, catalog, fileHandle, tableDescriptor, fileName);
-    catalog->closeFile(fileHandle);
-    if (rc != SUCCESS)
-    {
-        return TB_DN_EXIST;
-    }*/
-
     FileHandle tableFileHandle;
     RC rc = catalog->openFile(tableName, tableFileHandle);
     if (rc != SUCCESS)
