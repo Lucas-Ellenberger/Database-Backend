@@ -353,32 +353,70 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
 
 RC RelationManager::insertTuple(const string &tableName, const void *data, RID &rid)
 {
-    // Checks if table exists in catalog
-    /*if ()
+    if (catalog == NULL)
+    {
+        return CATALOG_DSN_EXIST;
+    }
+
+    /*// Prepare arguments to call findTableFileName
+    FileHandle fileHandle;
+    vector<Attribute> tableDescriptor;
+    createTableRecordDescriptor(tableDescriptor);
+    string fileName;
+
+    RC rc = catalog->openFile("Tables", fileHandle);
+    if (rc != SUCCESS)
+    {
+        return rc;
+    }
+
+    rc = findTableFileName(tableName, catalog, fileHandle, tableDescriptor, fileName); 
+    catalog->closeFile(fileHandle);                                                    
+    if (rc != SUCCESS)
     {
         return TB_DN_EXIST;
+    }*/
+
+    FileHandle tableFileHandle; 
+    RC rc = catalog->openFile(tableName, tableFileHandle);
+    if (rc != SUCCESS)
+    {
+        return rc; // Failed to open the file
     }
-    */
+
     return -1;
 }
 
 RC RelationManager::deleteTuple(const string &tableName, const RID &rid)
 {
+    if (catalog == NULL)
+    {
+        return CATALOG_DSN_EXIST;
+    }
     return -1;
 }
 
 RC RelationManager::updateTuple(const string &tableName, const void *data, const RID &rid)
 {
+    if (catalog == NULL)
+    {
+        return CATALOG_DSN_EXIST;
+    }
     return -1;
 }
 
 RC RelationManager::readTuple(const string &tableName, const RID &rid, void *data)
 {
+    if (catalog == NULL)
+    {
+        return CATALOG_DSN_EXIST;
+    }
     return -1;
 }
 
 RC RelationManager::printTuple(const vector<Attribute> &attrs, const void *data)
 {
+
     return -1;
 }
 
@@ -498,7 +536,7 @@ void RelationManager::createColumnRecordDescriptor(vector<Attribute> &recordDesc
 }
 
 // Method will scan table file based on the given file name and will place the file name within filename argument.
-// Requires that tableDescriptor is already called with createColumnRecordDescriptor beforehand
+// Requires that tableDescriptor is already called with createTableRecordDescriptor beforehand
 RC findTableFileName(const string &tableName, RecordBasedFileManager *rbfm, FileHandle &tableFileHandle,
                      const vector<Attribute> tableDescriptor, string &fileName)
 {
