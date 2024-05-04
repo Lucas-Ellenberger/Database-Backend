@@ -157,6 +157,7 @@ public:
           RBFM_ScanIterator &rbfm_ScanIterator);
 
   friend class RBFM_ScanIterator;
+
 public:
 protected:
   RecordBasedFileManager();
@@ -193,7 +194,7 @@ public:
   ~RBFM_ScanIterator();
 
   void Open(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const string &conditionAttribute, const CompOp compOp,
-      const void *value, const vector<string> &attributeNames);
+            const void *value, const vector<string> &attributeNames);
 
   // Never keep the results in the memory. When getNextRecord() is called,
   // a satisfying record needs to be fetched from the file.
@@ -219,6 +220,9 @@ private:
   bool intCompare(int *compare);
   bool floatCompare(float *compare);
   bool stringCompare(char *compare, uint32_t length);
+  bool setFieldNull(char *nullIndicator, int fieldNum);
+  unsigned getAttributeSize(const void *attributePtr, const Attribute &attribute);
+  RC formatRecord(void *data, const vector<Attribute> &recordDescriptor, const vector<string> &attributeNames);
 };
 
 #endif

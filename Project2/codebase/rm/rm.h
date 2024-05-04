@@ -10,6 +10,8 @@
 using namespace std;
 
 # define RM_EOF (-1)  // end of a scan operator
+# define CATALOG_DSN_EXIST 1
+# define TABLE_FILE_ALR_EXISTS 2
 
 // RM_ScanIterator is an iteratr to go through tuples
 class RM_ScanIterator {
@@ -62,13 +64,23 @@ public:
       const vector<string> &attributeNames, // a list of projected attributes
       RM_ScanIterator &rm_ScanIterator);
 
+  void prepareTableRecord(const int nameLength, const string &name, const int table_id, const string &table_name, const string &file_name, void *buffer, int *recordSize);
 
+  void prepareColumnRecord(const int nameLength, const string &name, const int table_id, const string column_name, const int column_type,
+                           const int column_length, const int column_position, void *buffer, int *recordSize);
+
+  void createTableRecordDescriptor(vector<Attribute> &recordDescriptor);
+
+  void createColumnRecordDescriptor(vector<Attribute> &recordDescriptor);
 protected:
   RelationManager();
   ~RelationManager();
 
 private:
   static RelationManager *_rm;
+  RecordBasedFileManager *catalog = RecordBasedFileManager::instance();
+  FileHandle *tableHandle = NULL;
+  FileHandle *columnHandle = NULL;
 };
 
 #endif
