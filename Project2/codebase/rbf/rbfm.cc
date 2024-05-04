@@ -856,67 +856,84 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data)
                 continue;
             }
 
-            // Pointer to start of record
             char *start = (char *)this->pageData + recordEntry.offset;
 
-            // Allocate space for null indicator.
-            int newNullIndicatorSize = rbfm->getNullIndicatorSize(this->attributeNames->size());
-            char newNullIndicator[newNullIndicatorSize];
-            memset(newNullIndicator, 0, newNullIndicatorSize);
-
-            // Allocate space for null indicator.
-            int nullIndicatorSize = rbfm->getNullIndicatorSize(this->recordDescriptor->size());
-            char nullIndicator[nullIndicatorSize];
-            memset(nullIndicator, 0, nullIndicatorSize);
-
-            // Get number of columns and size of the null indicator for this record
-            RecordLength len = 0;
-            memcpy(&len, start, sizeof(RecordLength));
-            int recordNullIndicatorSize = rbfm->getNullIndicatorSize(len);
-            // Read in the existing null indicator
-            memcpy(nullIndicator, start + sizeof(RecordLength), recordNullIndicatorSize);
-
-            // Initialize some offsets
-            // rec_offset: points to data in the record. We move this forward as we read data from our record
-            unsigned rec_offset = sizeof(RecordLength) + recordNullIndicatorSize + len * sizeof(ColumnOffset);
-            // data_offset: points to our current place in the output data. We move this forward as we write to data.
-            unsigned data_offset = nullIndicatorSize;
-            // directory_base: points to the start of our directory of indices
-            char *directory_base = start + sizeof(RecordLength) + recordNullIndicatorSize;
-
-            unsigned newNullIndex = 0;
-            for (unsigned i = 0; i < recordDescriptor->size(); i++)
-            {
-                if (rbfm->fieldIsNull(nullIndicator, i))
-                {
-                    if (std::find(attributeNames.begin(), attributeNames.end(), ))
-                    {
-                    }
-                    // TODO: Set NULL indicator.
-                    newNullIndex++;
-                    continue;
-                }
-
-                // Grab pointer to end of this column
-                ColumnOffset endPointer;
-                memcpy(&endPointer, directory_base + i * sizeof(ColumnOffset), sizeof(ColumnOffset));
-
-                // rec_offset keeps track of start of column, so end-start = total size
-                uint32_t fieldSize = endPointer - rec_offset;
-
-                // Special case for varchar, we must give data the size of varchar first
-                if ((*recordDescriptor)[i].type == TypeVarChar)
-                {
-                    memcpy((char *)data + data_offset, &fieldSize, VARCHAR_LENGTH_SIZE);
-                    data_offset += VARCHAR_LENGTH_SIZE;
-                }
-                // Next we copy bytes equal to the size of the field and increase our offsets
-                memcpy((char *)data + data_offset, start + rec_offset, fieldSize);
-                rec_offset += fieldSize;
-                data_offset += fieldSize;
+            if (formatRecord((void *) start, *recordDescriptor, *attributeNames)) {
+                cerr << "getNextRecord: Error formatting record. Skipping RID with pageNum: " << pageNum << ", recordNum: " << recordNum << endl;
+                this->recordNum++;
+                continue;
             }
 
+            // We wrote in the data!
+            rid.pageNum = pageNum;
+            rid.slotNum = recordNum;
+
+            // Prep starting record num for next call.
             this->recordNum++;
+            return SUCCESS;
+
+
+            // Pointer to start of record
+            /* char *start = (char *)this->pageData + recordEntry.offset; */
+
+            /* // Allocate space for null indicator. */
+            /* int newNullIndicatorSize = rbfm->getNullIndicatorSize(this->attributeNames->size()); */
+            /* char newNullIndicator[newNullIndicatorSize]; */
+            /* memset(newNullIndicator, 0, newNullIndicatorSize); */
+
+            /* // Allocate space for null indicator. */
+            /* int nullIndicatorSize = rbfm->getNullIndicatorSize(this->recordDescriptor->size()); */
+            /* char nullIndicator[nullIndicatorSize]; */
+            /* memset(nullIndicator, 0, nullIndicatorSize); */
+
+            /* // Get number of columns and size of the null indicator for this record */
+            /* RecordLength len = 0; */
+            /* memcpy(&len, start, sizeof(RecordLength)); */
+            /* int recordNullIndicatorSize = rbfm->getNullIndicatorSize(len); */
+            /* // Read in the existing null indicator */
+            /* memcpy(nullIndicator, start + sizeof(RecordLength), recordNullIndicatorSize); */
+
+            /* // Initialize some offsets */
+            /* // rec_offset: points to data in the record. We move this forward as we read data from our record */
+            /* unsigned rec_offset = sizeof(RecordLength) + recordNullIndicatorSize + len * sizeof(ColumnOffset); */
+            /* // data_offset: points to our current place in the output data. We move this forward as we write to data. */
+            /* unsigned data_offset = nullIndicatorSize; */
+            /* // directory_base: points to the start of our directory of indices */
+            /* char *directory_base = start + sizeof(RecordLength) + recordNullIndicatorSize; */
+
+            /* unsigned newNullIndex = 0; */
+            /* for (unsigned i = 0; i < recordDescriptor->size(); i++) */
+            /* { */
+            /*     if (rbfm->fieldIsNull(nullIndicator, i)) */
+            /*     { */
+            /*         if (std::find(attributeNames.begin(), attributeNames.end(), )) */
+            /*         { */
+            /*         } */
+            /*         // TODO: Set NULL indicator. */
+            /*         newNullIndex++; */
+            /*         continue; */
+            /*     } */
+
+            /*     // Grab pointer to end of this column */
+            /*     ColumnOffset endPointer; */
+            /*     memcpy(&endPointer, directory_base + i * sizeof(ColumnOffset), sizeof(ColumnOffset)); */
+
+            /*     // rec_offset keeps track of start of column, so end-start = total size */
+            /*     uint32_t fieldSize = endPointer - rec_offset; */
+
+            /*     // Special case for varchar, we must give data the size of varchar first */
+            /*     if ((*recordDescriptor)[i].type == TypeVarChar) */
+            /*     { */
+            /*         memcpy((char *)data + data_offset, &fieldSize, VARCHAR_LENGTH_SIZE); */
+            /*         data_offset += VARCHAR_LENGTH_SIZE; */
+            /*     } */
+            /*     // Next we copy bytes equal to the size of the field and increase our offsets */
+            /*     memcpy((char *)data + data_offset, start + rec_offset, fieldSize); */
+            /*     rec_offset += fieldSize; */
+            /*     data_offset += fieldSize; */
+            /* } */
+
+            /* this->recordNum++; */
         }
 
         // Increment the page number and reset the record num.
@@ -1154,14 +1171,15 @@ RC RBFM_ScanIterator::formatRecord(void *data, const vector<Attribute> &recordDe
     return SUCCESS;
 }
 
-bool setFieldNull(char *nullIndicator, int fieldNum)
+bool RBFM_ScanIterator::setFieldNull(char *nullIndicator, int fieldNum)
 {
     int byteIndex = fieldNum / 8;                         // Finds the byte of the n'th field
     int bitPosition = fieldNum % 8;                       // Find the bit position within that byte
     nullIndicator[byteIndex] |= (1 << (7 - bitPosition)); // Set the bit to 1
+    return true;
 }
 
-unsigned getAttributeSize(const void *attributePtr, const Attribute &attribute)
+unsigned RBFM_ScanIterator::getAttributeSize(const void *attributePtr, const Attribute &attribute)
 {
     switch (attribute.type)
     {
