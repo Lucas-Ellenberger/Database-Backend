@@ -539,18 +539,20 @@ RC RelationManager::updateTuple(const string &tableName, const void *data, const
     FileHandle handle;
     RC rc = catalog->openFile(tableName, handle);
     if (rc != SUCCESS) {
-        return rc; // Failed to open the file
+        return rc; 
     }
 
     vector<Attribute> recordDescriptor;
     rc = getAttributes(tableName, recordDescriptor);
     if (rc != SUCCESS) {
-        return rc; // Failed to open the file
+        catalog->closeFile(handle);
+        return rc;
     }
 
     rc = catalog->updateRecord(handle, recordDescriptor, data, rid);
     if (rc != SUCCESS) {
-        return rc; // Failed to open the file
+        catalog->closeFile(handle);
+        return rc;
     }
 
     rc = catalog->closeFile(handle);
@@ -566,18 +568,20 @@ RC RelationManager::readTuple(const string &tableName, const RID &rid, void *dat
     FileHandle handle;
     RC rc = catalog->openFile(tableName, handle);
     if (rc != SUCCESS) {
-        return rc; // Failed to open the file
+        return rc; 
     }
 
     vector<Attribute> recordDescriptor;
     rc = getAttributes(tableName, recordDescriptor);
     if (rc != SUCCESS) {
-        return rc; // Failed to open the file
+        catalog->closeFile(handle);
+        return rc; 
     }
 
     rc = catalog->readRecord(handle, recordDescriptor, rid, data);
     if (rc != SUCCESS) {
-        return rc; // Failed to open the file
+        catalog->closeFile(handle);
+        return rc; 
     }
 
     rc = catalog->closeFile(handle);
@@ -612,12 +616,18 @@ RC RelationManager::readAttribute(const string &tableName, const RID &rid, const
 
     vector<Attribute> recordDescriptor;
     rc = getAttributes(tableName, recordDescriptor);
-    if (rc != SUCCESS)
-    {
+    if (rc != SUCCESS) {
+        catalog->closeFile(handle);
         return rc;
     }
 
     rc = catalog->readAttribute(handle, recordDescriptor, rid, attributeName, data);
+    if (rc != SUCCESS) {
+        catalog->closeFile(handle);
+        return rc;
+    }
+
+    rc = catalog->closeFile(handle);
     return rc;
 }
 
@@ -628,8 +638,46 @@ RC RelationManager::scan(const string &tableName,
                          const vector<string> &attributeNames,
                          RM_ScanIterator &rm_ScanIterator)
 {
-    return -1;
+    if (catalog == NULL) {
+        return CATALOG_DSN_EXIST;
+    }
+
+    RC rc = catalog->openFile(table, rm_ScanIterator.rm_scan_handle);
+    if (rc != SUCCESS) {
+        return rc;
+    }
+
+    vector<Attribute> recordDescriptor;
+    rc = getAttributes(tableName, recordDescriptor);
+    if (rc != SUCCESS) {
+        catalog->closeFile(rm_ScanIterator.rm_scan_handle);
+        return rc;
+    }
+    
+    /* RBFM_ScanIterator scanIterator; */
+    /* rbfm_ScanIterator = &scanIterator; */
+    rc = rm_ScanIterator.scan(rm_ScanIterator.rm_scan_handle, recordDescriptor, conditionAttribute, compOp, value, attributeNames);
+    return rc;
 }
+
+RC RM_ScanIterator::scan(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const string &conditionAttribute, const CompOp compOp,
+                                        const void *value, const vector<string> &attributeNames) {
+    return catalog->scan(fileHandle, recordDescriptor, conditionAttribute, compOp, value, attributeNames, *rbfm_ScanIterator);
+}
+
+RC RM_ScanIterator::getNextTuple(RID &rid, void* data) {
+    if (catalog == NULL) {
+        return CATALOG_DSN_EXIST;
+    }
+
+    RC rc = rbfm_ScanIterator->getNextRecord(rid, data);
+    return rc;
+}
+
+RC RM_ScanIterator::close() {
+    return rbfm_ScanIterator->close();
+}
+
 
 // nameLength: size of record descriptor
 void RelationManager::prepareTableRecord(const int fieldCount, unsigned char *nullFieldsIndicator, const int table_id, const int tableNameLength, 
