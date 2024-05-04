@@ -82,6 +82,7 @@ private:
   RecordBasedFileManager *catalog = RecordBasedFileManager::instance();
   FileHandle *tableHandle = NULL;
   FileHandle *columnHandle = NULL;
+  uint32_t table_id_count = 0;
 };
 
 #endif
