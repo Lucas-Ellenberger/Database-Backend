@@ -525,11 +525,21 @@ RC RelationManager::updateTuple(const string &tableName, const void *data, const
 
 RC RelationManager::readTuple(const string &tableName, const RID &rid, void *data)
 {
-    if (catalog == NULL)
-    {
+    if (catalog == NULL) {
         return CATALOG_DSN_EXIST;
     }
-    return -1;
+    FileHandle handle;
+    RC rc = catalog->openFile(tableName, handle);
+    if (rc != SUCCESS) {
+        return rc; // Failed to open the file
+    }
+    vector<Attribute> recordDescriptor;
+    rc = catalog->getAttributes(tableName, recordDescriptor);
+    if (rc != SUCCESS) {
+        return rc; // Failed to open the file
+    }
+    rc = catalog->readRecord(handle, recordDescriptor, rid, data);
+    return rc;
 }
 
 RC RelationManager::printTuple(const vector<Attribute> &attrs, const void *data)
