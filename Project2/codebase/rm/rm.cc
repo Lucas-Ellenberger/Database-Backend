@@ -482,11 +482,11 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
 RC RelationManager::insertTuple(const string &tableName, const void *data, RID &rid)
 {
     // Checks if table exists in catalog
-    /*if (tableName){
+    /*if ()
+    {
         return TB_DN_EXIST;
     }
     */
-
     return -1;
 }
 
@@ -623,4 +623,39 @@ void RelationManager::createColumnRecordDescriptor(vector<Attribute> &recordDesc
     attr.type = TypeInt;
     attr.length = (AttrLength)4;
     recordDescriptor.push_back(attr);
+}
+
+// Method will scan table file based on the given file name and will place the file name within filename argument.
+// Requires that tableDescriptor is already called with createColumnRecordDescriptor beforehand
+RC findTableFileName(const string &tableName, RecordBasedFileManager *rbfm, FileHandle &tableFileHandle,
+                     const vector<Attribute> tableDescriptor, string &fileName)
+{
+    vector<string> attrsToRead = {"file-name"};
+
+    // Setup scan iterator
+    RBFM_ScanIterator rbfm_ScanIterator;
+    string conditionAttribute = "table-name";
+    CompOp compOp = EQ_OP;
+    void *value = (void *)tableName.c_str();
+
+    // Create Scan iterator
+    RC rc = rbfm->scan(tableFileHandle, tableDescriptor, conditionAttribute, compOp, value, attrsToRead, rbfm_ScanIterator);
+    if (rc != SUCCESS)
+    {
+        return rc;
+    }
+
+    RID rid;
+    char data[PAGE_SIZE];
+    if (rbfm_ScanIterator.getNextRecord(rid, &data) != RBFM_EOF)
+    {
+        int offset = ceil(static_cast<double>(attrsToRead.size()) / CHAR_BIT); // Skip over null indictors
+        int length = *(int *)(data + offset);                                  // Grab the length of varchar
+        fileName.assign(data + offset + sizeof(int), length);                  // assign places file name in the string
+        rbfm_ScanIterator.close();
+        return SUCCESS;
+    }
+
+    rbfm_ScanIterator.close();
+    return TB_DN_EXIST; // Table was not found
 }
