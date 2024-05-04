@@ -512,7 +512,27 @@ RC RelationManager::printTuple(const vector<Attribute> &attrs, const void *data)
 
 RC RelationManager::readAttribute(const string &tableName, const RID &rid, const string &attributeName, void *data)
 {
-    return -1;
+    if (catalog == NULL)
+    {
+        return CATALOG_DSN_EXIST;
+    }
+
+    // Check if table file exists
+    FileHandle handle;
+    RC rc = catalog->openFile(table, handle);
+    if (rc != SUCCESS)
+    {
+        return rc;
+    }
+
+    vector<Attribute> recordDescriptor;
+    rc = getAttributes(tableName, recordDescriptor);
+    if (rc != SUCCESS)
+    {
+        return rc;
+    }
+    rc = catalog->readAttribute(handle, recordDescriptor, rid, attributeName, data);
+    return rc;
 }
 
 RC RelationManager::scan(const string &tableName,
