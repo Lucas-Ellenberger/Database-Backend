@@ -534,8 +534,12 @@ RC RelationManager::readTuple(const string &tableName, const RID &rid, void *dat
 
 RC RelationManager::printTuple(const vector<Attribute> &attrs, const void *data)
 {
-
-    return -1;
+    if (catalog == NULL)
+    {
+        return CATALOG_DSN_EXIST;
+    }
+    RC rc = catalog->printRecord(attrs, data);
+    return rc;
 }
 
 RC RelationManager::readAttribute(const string &tableName, const RID &rid, const string &attributeName, void *data)
