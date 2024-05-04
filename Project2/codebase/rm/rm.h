@@ -22,9 +22,15 @@ public:
   ~RM_ScanIterator(){};
 
   // "data" follows the same format as RelationManager::insertTuple()
-  RC getNextTuple(RID &rid, void *data) { return RM_EOF; };
-  RC close() { return -1; };
+  RC scan(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const string &conditionAttribute, const CompOp compOp,
+                                        const void *value, const vector<string> &attributeNames);
+  RC getNextTuple(RID &rid, void *data);
+  RC close();
+
   FileHandle rm_scan_handle;
+private:
+  RecordBasedFileManager *catalog = RecordBasedFileManager::instance();
+  RBFM_ScanIterator *rbfm_ScanIterator;
 };
 
 // Relation Manager

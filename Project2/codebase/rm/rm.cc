@@ -626,6 +626,7 @@ RC RelationManager::readAttribute(const string &tableName, const RID &rid, const
         catalog->closeFile(handle);
         return rc;
     }
+
     rc = catalog->closeFile(handle);
     return rc;
 }
@@ -640,29 +641,39 @@ RC RelationManager::scan(const string &tableName,
     if (catalog == NULL) {
         return CATALOG_DSN_EXIST;
     }
+
     RC rc = catalog->openFile(table, rm_ScanIterator.rm_scan_handle);
     if (rc != SUCCESS) {
         return rc;
     }
+  
     vector<Attribute> recordDescriptor;
     rc = getAttributes(tableName, recordDescriptor);
     if (rc != SUCCESS) {
         catalog->closeFile(rm_ScanIterator.rm_scan_handle);
         return rc;
     }
-    RBFM_ScanIterator scanIterator;
-    RC rc = catalog->scan(rm_ScanIterator.rm_scan_handle, recordDescriptor, conditionAttribute, compOp, value, attributeNames, scanIterator);
+
+    rc = rm_ScanIterator.scan(rm_ScanIterator.rm_scan_handle, recordDescriptor, conditionAttribute, compOp, value, attributeNames);
+    return rc;
+}
+
+RC RM_ScanIterator::scan(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const string &conditionAttribute, const CompOp compOp,
+                                        const void *value, const vector<string> &attributeNames) {
+    return catalog->scan(fileHandle, recordDescriptor, conditionAttribute, compOp, value, attributeNames, *rbfm_ScanIterator);
 }
 
 RC RM_ScanIterator::getNextTuple(RID &rid, void* data) {
     if (catalog == NULL) {
         return CATALOG_DSN_EXIST;
     }
-    RC rc = catalog->getNextRecord(rid, data);
+
+    RC rc = rbfm_ScanIterator->getNextRecord(rid, data);
+    return rc;
 }
 
 RC RM_ScanIterator::close() {
-    catalog->closeFile(this.rm_scan_handle);
+    return rbfm_ScanIterator->close();
 }
 
 
