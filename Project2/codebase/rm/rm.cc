@@ -646,16 +646,14 @@ RC RelationManager::scan(const string &tableName,
     if (rc != SUCCESS) {
         return rc;
     }
-
+  
     vector<Attribute> recordDescriptor;
     rc = getAttributes(tableName, recordDescriptor);
     if (rc != SUCCESS) {
         catalog->closeFile(rm_ScanIterator.rm_scan_handle);
         return rc;
     }
-    
-    /* RBFM_ScanIterator scanIterator; */
-    /* rbfm_ScanIterator = &scanIterator; */
+
     rc = rm_ScanIterator.scan(rm_ScanIterator.rm_scan_handle, recordDescriptor, conditionAttribute, compOp, value, attributeNames);
     return rc;
 }
