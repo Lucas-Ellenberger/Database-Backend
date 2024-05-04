@@ -392,10 +392,10 @@ void RelationManager::prepareTableRecord(const int nameLength, const string &nam
     memcpy((char *)buffer + offset, &table_id, sizeof(int));
     offset += sizeof(int);
 
-    memcpy((char *)buffer + offset, table_name, table_name.size() + 1); // plus 1 for null terminator
+    memcpy((char *)buffer + offset, table_name.c_str(), table_name.size() + 1); // plus 1 for null terminator
     offset += table_name.size() + 1;
 
-    memcpy((char *)buffer + offset, file_name, file_name.size() + 1); // plus 1 for null terminator
+    memcpy((char *)buffer + offset, file_name.c_str(), file_name.size() + 1); // plus 1 for null terminator
     offset += file_name.size() + 1;
 
     *recordSize = offset;
@@ -414,7 +414,7 @@ void RelationManager::prepareColumnRecord(const int nameLength, const string &na
     memcpy((char *)buffer + offset, &table_id, sizeof(int));
     offset += sizeof(int);
 
-    memcpy((char *)buffer + offset, column_name, column_name.size() + 1);
+    memcpy((char *)buffer + offset, column_name.c_str(), column_name.size() + 1);
     offset += column_name.size() + 1;
 
     memcpy((char *)buffer + offset, &column_type, sizeof(int));
