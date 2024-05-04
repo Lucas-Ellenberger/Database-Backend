@@ -1137,7 +1137,7 @@ RC RBFM_ScanIterator::formatRecord(void *data, const vector<Attribute> &recordDe
                 else
                 {
                     memcpy(tempBuffer + formattedRecordOffset, dataPtr + recordOffset, attributeSize); // Copys attribute data into formatted record
-                    formattedRecordOffset += attributeSize;
+                    formattedRecordOffset += attributeSize; 
                 }
                 found = true;
             }
