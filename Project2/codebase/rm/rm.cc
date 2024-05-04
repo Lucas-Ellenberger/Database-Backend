@@ -18,7 +18,6 @@ RelationManager *RelationManager::instance()
 
 RelationManager::RelationManager()
 {
-    RecordBasedFileManager *catalog = NULL;
 }
 
 RelationManager::~RelationManager()
@@ -32,8 +31,6 @@ RC RelationManager::createCatalog()
     // for each attribute, we will store name and type
     // we do not have fixed length so we cannot store length.
     // we do not have any indexes so we will not store any information about indexes, same goes for constraints.
-
-    catalog = RecordBasedFileManager::instance();
 
     RC rc;
 
@@ -332,11 +329,11 @@ RC RelationManager::deleteTable(const string &tableName)
     vector<RID> column_rids_to_delete;
     while (columnsScanIterator.getNextRecord(rid, data) != RBFM_EOF)
     {
-        int offset = int(ceil((double)columnDescriptor.size() / CHAR_BIT)); // Offset accounting for empty nullindicator
+        /* int offset = int(ceil((double)columnDescriptor.size() / CHAR_BIT)); // Offset accounting for empty nullindicator */
         RID rid_temp;
-        rid_temp.length = rid.length;
-        rid_temp.offset = rid.offset;
-        column_rids_to_delete.push_back(rid);
+        rid_temp.pageNum = rid.pageNum;
+        rid_temp.slotNum = rid.slotNum;
+        column_rids_to_delete.push_back(rid_temp);
         //no values inside the tuples should matter, i just need to delete them, lets create a vector of RIDs
 
         
@@ -345,8 +342,8 @@ RC RelationManager::deleteTable(const string &tableName)
     catalog->closeFile(columnFileHandle);
 
     //loop through all stored RIDs in the Columns table that need to be deleted and delete them
-    for (int i = 0; i < column_rids_to_delete.size(), i += 1){
-        rc = deleteTuple(column_rids_to_delete[i], "Columns");
+    for (unsigned i = 0; i < column_rids_to_delete.size(); i += 1){
+        rc = deleteTuple("Columns", column_rids_to_delete[i]);
         if (rc != SUCCESS) {
             free(data);
             return 11;
@@ -539,18 +536,21 @@ RC RelationManager::updateTuple(const string &tableName, const void *data, const
     if (catalog == NULL) {
         return CATALOG_DSN_EXIST;
     }
+
     FileHandle handle;
     RC rc = catalog->openFile(tableName, handle);
     if (rc != SUCCESS) {
         return rc; 
     }
+
     vector<Attribute> recordDescriptor;
-    rc = catalog->getAttributes(tableName, recordDescriptor);
+    rc = getAttributes(tableName, recordDescriptor);
     if (rc != SUCCESS) {
         catalog->closeFile(handle);
         return rc;
     }
-    rc = catalog->updateRecord(handle, recordDescriptor, rid, data);
+
+    rc = catalog->updateRecord(handle, recordDescriptor, data, rid);
     if (rc != SUCCESS) {
         catalog->closeFile(handle);
         return rc;
@@ -570,7 +570,7 @@ RC RelationManager::readTuple(const string &tableName, const RID &rid, void *dat
         return rc; 
     }
     vector<Attribute> recordDescriptor;
-    rc = catalog->getAttributes(tableName, recordDescriptor);
+    rc = getAttributes(tableName, recordDescriptor);
     if (rc != SUCCESS) {
         catalog->closeFile(handle);
         return rc; 
