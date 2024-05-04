@@ -878,6 +878,9 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data)
             for (unsigned i = 0; i < recordDescriptor->size(); i++)
             {
                 if (rbfm->fieldIsNull(nullIndicator, i)) {
+                    if (std::find(attributeNames.begin(), attributeNames.end(), )) {
+
+                    }
                     // TODO: Set NULL indicator.
                     newNullIndex++;
                     continue;
@@ -911,9 +914,8 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data)
     }
 
     // TODO:
-    // Check if record satisfies the condition.
     // If it does, construct data to have the reduced number of null indicators.
-    // Then, write in onlt the correct fields.
+    // Then, write in only the correct fields.
     // Use read record and read attribute as guides.
 
     return RBFM_EOF;
@@ -959,7 +961,7 @@ bool RBFM_ScanIterator::acceptRecord(unsigned offset) {
     {
     	if ((*recordDescriptor)[i].name == *conditionAttribute) {
       		if (rbfm->fieldIsNull(nullIndicator, i))
-				return true;
+				return false;
 
             ColumnOffset endPointer;
             memcpy(&endPointer, directory_base + i * sizeof(ColumnOffset), sizeof(ColumnOffset));
@@ -986,7 +988,6 @@ bool RBFM_ScanIterator::acceptRecord(unsigned offset) {
 
                 return floatCompare(&data_real);
             case TypeVarChar:
-
 		    	uint32_t varcharSize;
             	memcpy(&varcharSize, ((char *)pageData + data_offset), VARCHAR_LENGTH_SIZE);
             	data_offset += VARCHAR_LENGTH_SIZE;
