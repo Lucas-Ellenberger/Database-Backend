@@ -251,10 +251,10 @@ RC RecordBasedFileManager::printRecord(const vector<Attribute> &recordDescriptor
     return SUCCESS;
 }
 
-RC RBFM_ScanIterator::my_format_record(const vector<Attribute> &recordDescriptor, const void *data, const vector<string> &attributeNames, const void *return_data, const string &conditionAttribute, const CompOp compOp, uint32_t* length_of_record_to_return);
+RC RBFM_ScanIterator::my_format_record(const vector<Attribute> &recordDescriptor, const void *data, const vector<string> &attributeNames, const void *return_data, const string &conditionAttribute, const CompOp compOp, uint32_t* length_of_record_to_return)
 {
     // Parse the null indicator and save it into an array.
-    int nullIndicatorSize = getNullIndicatorSize(attributeNames.size());
+    int nullIndicatorSize = rbfm->getNullIndicatorSize(attributeNames.size());
     char nullIndicator[nullIndicatorSize];
     memset(nullIndicator, 0, nullIndicatorSize);
     memcpy(nullIndicator, data, nullIndicatorSize);
@@ -304,21 +304,23 @@ RC RBFM_ScanIterator::my_format_record(const vector<Attribute> &recordDescriptor
             }
         }
         if(in_set) {
-            bool isNull = fieldIsNull(nullIndicator, i);
+            bool isNull = rbfm->fieldIsNull(nullIndicator, i);
             // if the current attribute is NULL, just push the null bit and then continue to next attribute
             if (isNull) {
                 uint8_t bitmask = 1 << (7 - (null_indictor_index % 8));
                 nullIndicator[i / 8] = nullIndicator[i / 8] | bitmask;
                 continue;
             }
+          
             switch (recordDescriptor[i].type)
             {
             case TypeInt:
                 if (con_attr) {
-                    uint32_t data_integer;
+                    int data_integer;
                     memcpy(&data_integer, ((char *)data + offset), INT_SIZE);
                     include = intCompare(&data_integer);
                 }
+ 
                 // uint32_t data_integer;
                 memcpy(((char *)return_data + offset), ((char *)data + offset), INT_SIZE);
                 offset += INT_SIZE;
@@ -329,7 +331,7 @@ RC RBFM_ScanIterator::my_format_record(const vector<Attribute> &recordDescriptor
                 if (con_attr) {
                     float data_real;
                     memcpy(&data_real, ((char *)data + offset), REAL_SIZE);
-                    include = floatCompare(&data_integer);
+                    include = floatCompare(&data_real);
                 }
                 // float data_real;
                 memcpy(((char *)return_data + offset), ((char *)data + offset), REAL_SIZE);
@@ -339,7 +341,7 @@ RC RBFM_ScanIterator::my_format_record(const vector<Attribute> &recordDescriptor
                 break;
             case TypeVarChar:
                 if (con_attr) {
-                    uint32_t varcharSize;
+                    unsigned varcharSize;
                     memcpy(&varcharSize, ((char *)data + offset), VARCHAR_LENGTH_SIZE);
 
                     char *data_string = (char *)malloc(varcharSize + 1);
@@ -351,9 +353,10 @@ RC RBFM_ScanIterator::my_format_record(const vector<Attribute> &recordDescriptor
 
                     include = stringCompare(data_string, varcharSize);
                 }
+  
                 // First VARCHAR_LENGTH_SIZE bytes describe the varchar length
-                uint32_t varcharSize;
-                memcpy(varcharSize, ((char *)data + offset), VARCHAR_LENGTH_SIZE);
+                unsigned varcharSize;
+                memcpy(&varcharSize, ((char *)data + offset), VARCHAR_LENGTH_SIZE);
                 memcpy(((char *)return_data + offset), ((char *)data + offset), VARCHAR_LENGTH_SIZE);
                 offset += VARCHAR_LENGTH_SIZE;
 
@@ -370,7 +373,7 @@ RC RBFM_ScanIterator::my_format_record(const vector<Attribute> &recordDescriptor
             continue;
         }
     }
-    length_of_record_to_return = offset;
+    *length_of_record_to_return = offset;
     // cout << "----" << endl;
     if (!flagFound) {
         // condition attribute does not exist in this record descriptor
@@ -1061,13 +1064,13 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data)
             RID cur;
             cur.pageNum = this->pageNum;
             cur.slotNum = this->recordNum;
-            readRecord(*(this->fileHandle), *(this->recordDescriptor), cur, record_itself);
+            rbfm->readRecord(*(this->fileHandle), *(this->recordDescriptor), cur, record_itself);
             
-            uint32_t length_of_record_to_return = 0;
+            unsigned length_of_record_to_return = 0;
             char* record_data = (char*)malloc(PAGE_SIZE);
             memset(record_data, 0, PAGE_SIZE);
 
-            RC rc = my_format_record(*(this->recordDescriptor), record_itself, *attributeNames, record_data, this->conditionAttribute, this->compOp, &length_of_record_to_return);
+            RC rc = my_format_record(*(this->recordDescriptor), record_itself, *attributeNames, record_data, *conditionAttribute, this->compOp, &length_of_record_to_return);
             if (rc == DO_NOT_INCLUDE) {
                 free(record_data);
                 free(record_itself);
@@ -1180,9 +1183,10 @@ bool RBFM_ScanIterator::acceptRecord(unsigned offset)
                 // Gets the actual string.
                 cerr << "acceptRecord: found a varchar of size: " << varcharSize << endl;
                 char *data_string = (char *)malloc(varcharSize + 1);
-                if (data_string == NULL)
+                if (data_string == NULL) {
                     cerr << "acceptRecord: Unable to malloc data_string." << endl;
                     return false;
+                }
 
                 memcpy(data_string, ((char *)pageData + data_offset), varcharSize);
 
