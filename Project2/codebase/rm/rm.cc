@@ -79,7 +79,7 @@ RC RelationManager::createCatalog()
         return rc;
     }
 
-    FileHandle columnHandle;
+    /* FileHandle columnHandle; */
     rc = catalog->createFile("Columns");
     if (rc != SUCCESS)
     {
@@ -162,7 +162,20 @@ RC RelationManager::deleteCatalog()
 RC RelationManager::createTable(const string &tableName, const vector<Attribute> &attrs)
 {
     // have to check if table exists already, only way I see is by going through the catalog to see if there is already a table of the same name (idk how to do that yet)
-    RC rc;
+    RC rc = catalog->openFile("Tables", tableHandle);
+    if (rc != SUCCESS)
+    {
+        cerr << "Unable to open Tables file" << endl;
+        return rc;
+    }
+
+    rc = catalog->openFile("Columns", columnHandle);
+    if (rc != SUCCESS)
+    {
+        cerr << "Unable to open Columns file" << endl;
+        return rc;
+    }
+
     rc = catalog->createFile(tableName);
     if (rc != SUCCESS)
     {
@@ -201,7 +214,8 @@ RC RelationManager::createTable(const string &tableName, const vector<Attribute>
     memset(nullsIndicatorColumn, 0, columnNullFieldsIndicatorActualSize);
 
     prepareTableRecord(tableDescriptor.size(), nullsIndicatorTable, table_id_count, tableName.size(), tableName, tableName.size(), tableName, record, &recordSize);
-    rc = catalog->insertRecord(handle, tableDescriptor, record, rid);
+
+    rc = catalog->insertRecord(tableHandle, tableDescriptor, record, rid);
     if (rc != SUCCESS)
     {
         cerr << "Unable to insert " << tableName << " record into table Table" << endl;
@@ -222,6 +236,8 @@ RC RelationManager::createTable(const string &tableName, const vector<Attribute>
 
     table_id_count += 1;
     catalog->closeFile(handle);
+    catalog->closeFile(columnHandle);
+    catalog->closeFile(tableHandle);
     free(record);
     free(returnedData);
 
