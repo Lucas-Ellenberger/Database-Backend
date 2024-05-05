@@ -257,7 +257,7 @@ RC RelationManager::deleteTable(const string &tableName)
 
     // Check if table file exists
     FileHandle tableFileHandle;
-    RC rc = catalog->openFile("Tables", tableFileHandle);
+    RC rc = catalog->openFile(tableName, tableFileHandle);
     if (rc != SUCCESS)
     {
         return rc;
@@ -348,6 +348,7 @@ RC RelationManager::deleteTable(const string &tableName)
         RID rid_temp;
         rid_temp.pageNum = rid.pageNum;
         rid_temp.slotNum = rid.slotNum;
+        cerr << "rid.pageNum: " << rid.pageNum << " rid.slotNum: " << rid.slotNum << endl;
         column_rids_to_delete.push_back(rid_temp);
         //no values inside the tuples should matter, i just need to delete them, lets create a vector of RIDs
     }
