@@ -253,36 +253,44 @@ RC RecordBasedFileManager::printRecord(const vector<Attribute> &recordDescriptor
 
 RC RBFM_ScanIterator::my_format_record(const vector<Attribute> &recordDescriptor, const void *data, const vector<string> &attributeNames, const void *return_data, const string &conditionAttribute, const CompOp compOp, uint32_t* length_of_record_to_return)
 {
+    rbfm->printRecord(recordDescriptor, data);
     // Parse the null indicator and save it into an array.
-    int nullIndicatorSize = rbfm->getNullIndicatorSize(attributeNames.size());
+    int nullIndicatorSize = rbfm->getNullIndicatorSize(recordDescriptor.size());
     char nullIndicator[nullIndicatorSize];
     memset(nullIndicator, 0, nullIndicatorSize);
     memcpy(nullIndicator, data, nullIndicatorSize);
+
+    //our null indicators to add into return data
+    int returnNullIndicatorSize = rbfm->getNullIndicatorSize(attributeNames.size());
+    char returnNullIndicator[returnNullIndicatorSize];
+    memset(returnNullIndicator, 0, returnNullIndicatorSize);
+
     int null_indictor_index = 0;
     // We've read in the null indicator, so we can skip past it now
     unsigned offset = nullIndicatorSize;
+    unsigned ret_offset = returnNullIndicatorSize;
 
     // cout << "----" << endl;
     bool flagFound = false;
     bool include = false;
-
-    for (unsigned i = 0; i < (unsigned)recordDescriptor.size(); i++) {
-        if (recordDescriptor[i].name == conditionAttribute) {
-            flagFound = true;
-            switch (recordDescriptor[i].type) {
-                case TypeInt:
+    vector<Attribute> myAttrs;
+    // for (unsigned i = 0; i < (unsigned)recordDescriptor.size(); i++) {
+    //     if (recordDescriptor[i].name == conditionAttribute) {
+    //         flagFound = true;
+    //         switch (recordDescriptor[i].type) {
+    //             case TypeInt:
                     
-                    break;
-                case TypeReal:
-                    break;
-                case TypeVarChar:
-                    break;
-            }
-        }
-        else {
-            continue;
-        }
-    }
+    //                 break;
+    //             case TypeReal:
+    //                 break;
+    //             case TypeVarChar:
+    //                 break;
+    //         }
+    //     }
+    //     else {
+    //         continue;
+    //     }
+    // }
 
 
     for (unsigned i = 0; i < (unsigned)recordDescriptor.size(); i++)
@@ -295,6 +303,7 @@ RC RBFM_ScanIterator::my_format_record(const vector<Attribute> &recordDescriptor
         for (int i = 0; i < attributeNames.size(); i += 1){
             if(recordDescriptor[i].name == attributeNames[i])
                 in_set = true;
+
             if(recordDescriptor[i].name == conditionAttribute) {
                 con_attr = true;
                 flagFound = true;
@@ -304,11 +313,12 @@ RC RBFM_ScanIterator::my_format_record(const vector<Attribute> &recordDescriptor
             }
         }
         if(in_set) {
+            myAttrs.push_back(recordDescriptor[i]);
             bool isNull = rbfm->fieldIsNull(nullIndicator, i);
             // if the current attribute is NULL, just push the null bit and then continue to next attribute
             if (isNull) {
                 uint8_t bitmask = 1 << (7 - (null_indictor_index % 8));
-                nullIndicator[i / 8] = nullIndicator[i / 8] | bitmask;
+                returnNullIndicator[null_indictor_index / 8] = returnNullIndicator[null_indictor_index / 8] | bitmask;
                 continue;
             }
           
@@ -322,8 +332,9 @@ RC RBFM_ScanIterator::my_format_record(const vector<Attribute> &recordDescriptor
                 }
  
                 // uint32_t data_integer;
-                memcpy(((char *)return_data + offset), ((char *)data + offset), INT_SIZE);
+                memcpy(((char *)return_data + ret_offset), ((char *)data + offset), INT_SIZE);
                 offset += INT_SIZE;
+                ret_offset += INT_SIZE;
 
                 // cout << "" << data_integer << endl;
                 break;
@@ -334,8 +345,9 @@ RC RBFM_ScanIterator::my_format_record(const vector<Attribute> &recordDescriptor
                     include = floatCompare(&data_real);
                 }
                 // float data_real;
-                memcpy(((char *)return_data + offset), ((char *)data + offset), REAL_SIZE);
+                memcpy(((char *)return_data + ret_offset), ((char *)data + offset), REAL_SIZE);
                 offset += REAL_SIZE;
+                ret_offset += REAL_SIZE;
 
                 // cout << "" << data_real << endl;
                 break;
@@ -357,23 +369,39 @@ RC RBFM_ScanIterator::my_format_record(const vector<Attribute> &recordDescriptor
                 // First VARCHAR_LENGTH_SIZE bytes describe the varchar length
                 unsigned varcharSize;
                 memcpy(&varcharSize, ((char *)data + offset), VARCHAR_LENGTH_SIZE);
-                memcpy(((char *)return_data + offset), ((char *)data + offset), VARCHAR_LENGTH_SIZE);
+                memcpy(((char *)return_data + ret_offset), ((char *)data + offset), VARCHAR_LENGTH_SIZE);
                 offset += VARCHAR_LENGTH_SIZE;
-
+                ret_offset += VARCHAR_LENGTH_SIZE;
                 // // Gets the actual string.
                 // char *data_string = (char *)malloc(varcharSize + 1);
                 // if (data_string == NULL)
                 //     return RBFM_MALLOC_FAILED;
-                memcpy(((char *)return_data + offset), ((char *)data + offset), varcharSize);
+                memcpy(((char *)return_data + ret_offset), ((char *)data + offset), varcharSize);
+                offset += varcharSize;
+                ret_offset += varcharSize;
                 break;
             }
             null_indictor_index += 1;
         }
         else {
+            switch (recordDescriptor[i].type) {
+                case TypeInt:
+                    offset += INT_SIZE;
+                    break;
+                case TypeReal:
+                    offset += REAL_SIZE;
+                    break;
+                case TypeVarChar:
+                    unsigned varcharSize;
+                    memcpy(&varcharSize, ((char *)data + offset), VARCHAR_LENGTH_SIZE);
+                    offset += (varcharSize + VARCHAR_LENGTH_SIZE);
+                    break;
+            }
             continue;
         }
     }
-    *length_of_record_to_return = offset;
+    rbfm->printRecord(myAttrs, return_data);
+    *length_of_record_to_return = ret_offset;
     // cout << "----" << endl;
     if (!flagFound) {
         // condition attribute does not exist in this record descriptor
