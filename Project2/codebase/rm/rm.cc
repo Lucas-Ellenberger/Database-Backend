@@ -347,7 +347,8 @@ RC RelationManager::deleteTable(const string &tableName)
         RID rid_temp;
         rid_temp.pageNum = rid.pageNum;
         rid_temp.slotNum = rid.slotNum;
-        cerr << "rid.pageNum: " << rid.pageNum << " rid.slotNum: " << rid.slotNum << endl;
+        /* cerr << "rid.pageNum: " << rid.pageNum << " rid.slotNum: " << rid.slotNum << endl; */
+        /* cerr << "rid_temp.pageNum: " << rid_temp.pageNum << " rid_temp.slotNum: " << rid_temp.slotNum << endl; */
         column_rids_to_delete.push_back(rid_temp);
         //no values inside the tuples should matter, i just need to delete them, lets create a vector of RIDs
     }
@@ -357,6 +358,7 @@ RC RelationManager::deleteTable(const string &tableName)
 
     //loop through all stored RIDs in the Columns table that need to be deleted and delete them
     for (unsigned i = 0; i < column_rids_to_delete.size(); i += 1){
+        /* cerr << "col_to_del[i].pageNum: " << column_rids_to_delete[i].pageNum << " rid_temp.slotNum: " << column_rids_to_delete[i].slotNum << endl; */
         rc = deleteTuple("Columns", column_rids_to_delete[i]);
         if (rc != SUCCESS) {
             free(data);
@@ -546,8 +548,8 @@ RC RelationManager::deleteTuple(const string &tableName, const RID &rid)
     }
 
     // Open file corresponding to the table name
-    FileHandle tableFileHandle;
-    RC rc = catalog->openFile("Tables", tableFileHandle);
+    FileHandle handle;
+    RC rc = catalog->openFile(tableName, handle);
     if (rc != SUCCESS)
     {
         return rc;
@@ -556,8 +558,8 @@ RC RelationManager::deleteTuple(const string &tableName, const RID &rid)
     vector<Attribute> recordDescriptor; // Empty recordDescriptor since deleteRecord doesn't use it
 
     // Delete the record from the file
-    rc = catalog->deleteRecord(tableFileHandle, recordDescriptor, rid);
-    catalog->closeFile(tableFileHandle); // Always close the file handle regardless of the outcome
+    rc = catalog->deleteRecord(handle, recordDescriptor, rid);
+    catalog->closeFile(handle); // Always close the file handle regardless of the outcome
 
     if (rc != SUCCESS)
     {
