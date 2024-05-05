@@ -1066,7 +1066,7 @@ RC RBFM_ScanIterator::my_format_record(const vector<Attribute> &recordDescriptor
                     char *data_string = (char *)malloc(varcharSize + 1);
                     if (data_string == NULL)
                         return RBFM_MALLOC_FAILED;
-                    memcpy(data_string, ((char *)data + offset), varcharSize);
+                    memcpy(data_string, ((char *)data + offset + VARCHAR_LENGTH_SIZE), varcharSize);
                     data_string[varcharSize] = '\0';
 
 
