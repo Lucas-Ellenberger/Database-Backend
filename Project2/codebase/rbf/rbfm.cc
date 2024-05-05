@@ -5,7 +5,12 @@
 #include <string.h>
 #include <iomanip>
 
+// everthing is an int32_t
+// setting
+int32_t bitmask = 0x80000000;
 
+// retreiving
+int32_t retreivemask = 0x7fffffff;
 
 RecordBasedFileManager *RecordBasedFileManager::_rbf_manager = NULL;
 PagedFileManager *RecordBasedFileManager::_pf_manager = NULL;
@@ -69,6 +74,8 @@ RC RecordBasedFileManager::closeFile(FileHandle &fileHandle)
 RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const void *data, RID &rid)
 {
     // Gets the size of the record.
+    /* cerr << "insertRecord: Received the following data." << endl; */
+    /* printRecord(recordDescriptor, data); */
     unsigned recordSize = getRecordSize(recordDescriptor, data);
 
     // Cycles through pages looking for enough free space for the new entry.
@@ -230,6 +237,8 @@ RC RecordBasedFileManager::printRecord(const vector<Attribute> &recordDescriptor
             uint32_t varcharSize;
             memcpy(&varcharSize, ((char *)data + offset), VARCHAR_LENGTH_SIZE);
             offset += VARCHAR_LENGTH_SIZE;
+            /* if (varcharSize > 10) */
+            /*     cerr << "printRecord: found a varchar of length: " << varcharSize << endl; */
 
             // Gets the actual string.
             char *data_string = (char *)malloc(varcharSize + 1);
@@ -345,6 +354,9 @@ RC RecordBasedFileManager::deleteRecord(FileHandle &fileHandle, const vector<Att
 
 RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const void *data, const RID &rid)
 {
+    cerr << "updateRecord: starting rid.pageNum: " << rid.pageNum << " rid.slotNum: " << rid.slotNum << endl;
+    /* cerr << "updateRecord: We are trying to write in:" << endl; */
+    /* printRecord(recordDescriptor, data); */
     // Retrieve the specified page
     void *pageData = malloc(PAGE_SIZE);
     if (pageData == NULL)
@@ -382,14 +394,19 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
         return RBFM_SLOT_ALR_DELETED;
     };
 
-
     // Check if oldEntry is a forwarding address
     if (oldEntry.offset < 0)
     {
         // Creates RID to be passed in deleteRecord
         RID forwardingRid;
-        forwardingRid.pageNum = oldEntry.offset * -1;
+        forwardingRid.pageNum = oldEntry.offset & retreivemask;
         forwardingRid.slotNum = oldEntry.length;
+        // retreiving
+        /* void *temp = malloc(PAGE_SIZE); */
+        /* readRecord(fileHandle, recordDescriptor, forwardingRid, temp); */
+        /* cerr << "updateRecord: record data before update from forwarded address." << endl; */
+        /* printRecord(recordDescriptor, temp); */
+        /* free(temp); */
 
         if (deleteRecord(fileHandle, recordDescriptor, forwardingRid))
         {
@@ -404,6 +421,7 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
         }
 
         setSlotDirectoryRecordEntry(pageData, rid.slotNum, oldEntry);
+        cerr << "updateRecord: after delete: rid.pageNum: " << rid.pageNum << " rid.slotNum: " << rid.slotNum << endl;
 
         if (fileHandle.writePage(rid.pageNum, pageData))
         {
@@ -425,11 +443,18 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
 
         // Preps RecordEntry to be inserted in directory
         SlotDirectoryRecordEntry newEntry;
-        newEntry.offset = forwardingRid.pageNum * -1; // Multiply by -1 to set forwarding flag
+        cerr << "bitmask: " << bitmask << endl;
+        cerr << "updateRecord: after insert: forwardingRid.pageNum: " << forwardingRid.pageNum << endl;
+        newEntry.offset = forwardingRid.pageNum | bitmask;
         newEntry.length = forwardingRid.slotNum;      // Sets slot num of forwarded address
+        cerr << "updateRecord: after insert: newEntry.offset: " << newEntry.offset << endl;
+        /* newEntry.offset = forwardingRid.pageNum * -1; // Multiply by -1 to set forwarding flag */
+        /* newEntry.length = forwardingRid.slotNum;      // Sets slot num of forwarded address */
 
         // Update Slot Directory
         setSlotDirectoryRecordEntry(pageData, rid.slotNum, newEntry); // Accesses old rid for slot number
+        cerr << "updateRecord: after insert: rid.pageNum: " << rid.pageNum << " rid.slotNum: " << rid.slotNum << endl;
+        cerr << "updateRecord: after insert: forwardingRid.pageNum: " << forwardingRid.pageNum << " forwardingRid.slotNum: " << forwardingRid.slotNum << endl;
 
         // Write back the page data
         if (fileHandle.writePage(rid.pageNum, pageData))
@@ -441,8 +466,11 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
         free(pageData);
         return SUCCESS;
     }
-    cerr << "updateRecord: record data before the update:" << endl;
-    printRecord(recordDescriptor, (char *)data + oldEntry.offset);
+    /* cerr << "updateRecord: record data before the update:" << endl; */
+    /* void *temp = malloc(PAGE_SIZE); */
+    /* readRecord(fileHandle, recordDescriptor, rid, temp); */
+    /* printRecord(recordDescriptor, temp); */
+    /* free(temp); */
 
     // Case when record is present on the page
     if (deleteRecord(fileHandle, recordDescriptor, rid))
@@ -456,6 +484,7 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
         free(pageData);
         return RBFM_READ_FAILED;
     }
+    cerr << "updateRecord: after delete: rid.pageNum: " << rid.pageNum << " rid.slotNum: " << rid.slotNum << endl;
 
     setSlotDirectoryRecordEntry(pageData, rid.slotNum, oldEntry);
 
@@ -468,7 +497,7 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
     // Creates RID to be passed in insertRecord
     RID forwardingRid;
 
-    if (insertRecord(fileHandle, recordDescriptor, pageData, forwardingRid)) // After inserting, new Rid is stored in forwardingRid
+    if (insertRecord(fileHandle, recordDescriptor, data, forwardingRid)) // After inserting, new Rid is stored in forwardingRid
     {
         free(pageData);
         return RBFM_INSERT_FAILED;
@@ -482,8 +511,13 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
 
     // Preps RecordEntry to be inserted in directory
     SlotDirectoryRecordEntry newEntry;
-    newEntry.offset = forwardingRid.pageNum * -1; // Multiply by -1 to set forwarding flag
+    /* unsigned bitmask = 1; */
+    /* bitmask << (sizeof(newEntry.offset) * CHAR_BIT) - 1; */
+    cerr << "bitmask: " << bitmask << endl;
+    cerr << "updateRecord: after insert: forwardingRid.pageNum: " << forwardingRid.pageNum << endl;
+    newEntry.offset = forwardingRid.pageNum | bitmask;
     newEntry.length = forwardingRid.slotNum;      // Sets slot num of forwarded address
+    cerr << "updateRecord: after insert: newEntry.offset: " << newEntry.offset << endl;
 
     // Update RecordEntry to have forwarding address
     setSlotDirectoryRecordEntry(pageData, rid.slotNum, newEntry); // Accesses old rid for slot number
@@ -493,6 +527,11 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
         free(pageData);
         return RBFM_WRITE_FAILED;
     }
+    /* cerr << "updateRecord: record data after the update:" << endl; */
+    /* temp = malloc(PAGE_SIZE); */
+    /* readRecord(fileHandle, recordDescriptor, forwardingRid, temp); */
+    /* printRecord(recordDescriptor, temp); */
+    /* free(temp); */
 
     free(pageData);
     return SUCCESS;
@@ -1074,8 +1113,8 @@ RC RBFM_ScanIterator::my_format_record(const vector<Attribute> &recordDescriptor
             bool isNull = rbfm->fieldIsNull(nullIndicator, i);
             // if the current attribute is NULL, just push the null bit and then continue to next attribute
             if (isNull) {
-                uint8_t bitmask = 1 << (7 - (null_indictor_index % 8));
-                returnNullIndicator[null_indictor_index / 8] = returnNullIndicator[null_indictor_index / 8] | bitmask;
+                uint8_t their_bitmask = 1 << (7 - (null_indictor_index % 8));
+                returnNullIndicator[null_indictor_index / 8] = returnNullIndicator[null_indictor_index / 8] | their_bitmask;
                 continue;
             }
           
