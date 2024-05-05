@@ -5,6 +5,8 @@
 #include <string.h>
 #include <iomanip>
 
+
+
 RecordBasedFileManager *RecordBasedFileManager::_rbf_manager = NULL;
 PagedFileManager *RecordBasedFileManager::_pf_manager = NULL;
 
@@ -246,6 +248,137 @@ RC RecordBasedFileManager::printRecord(const vector<Attribute> &recordDescriptor
     }
     cout << "----" << endl;
 
+    return SUCCESS;
+}
+
+RC RBFM_ScanIterator::my_format_record(const vector<Attribute> &recordDescriptor, const void *data, const vector<string> &attributeNames, const void *return_data, const string &conditionAttribute, const CompOp compOp, uint32_t* length_of_record_to_return);
+{
+    // Parse the null indicator and save it into an array.
+    int nullIndicatorSize = getNullIndicatorSize(attributeNames.size());
+    char nullIndicator[nullIndicatorSize];
+    memset(nullIndicator, 0, nullIndicatorSize);
+    memcpy(nullIndicator, data, nullIndicatorSize);
+    int null_indictor_index = 0;
+    // We've read in the null indicator, so we can skip past it now
+    unsigned offset = nullIndicatorSize;
+
+    // cout << "----" << endl;
+    bool flagFound = false;
+    bool include = false;
+
+    for (unsigned i = 0; i < (unsigned)recordDescriptor.size(); i++) {
+        if (recordDescriptor[i].name == conditionAttribute) {
+            flagFound = true;
+            switch (recordDescriptor[i].type) {
+                case TypeInt:
+                    
+                    break;
+                case TypeReal:
+                    break;
+                case TypeVarChar:
+                    break;
+            }
+        }
+        else {
+            continue;
+        }
+    }
+
+
+    for (unsigned i = 0; i < (unsigned)recordDescriptor.size(); i++)
+    {
+        // cout << setw(10) << left << recordDescriptor[i].name << ": ";
+        // If the field is null, don't print it
+        bool in_set = false;
+        bool con_attr = false;
+        
+        for (int i = 0; i < attributeNames.size(); i += 1){
+            if(recordDescriptor[i].name == attributeNames[i])
+                in_set = true;
+            if(recordDescriptor[i].name == conditionAttribute) {
+                con_attr = true;
+                flagFound = true;
+            }
+            else {
+                con_attr = false;
+            }
+        }
+        if(in_set) {
+            bool isNull = fieldIsNull(nullIndicator, i);
+            // if the current attribute is NULL, just push the null bit and then continue to next attribute
+            if (isNull) {
+                uint8_t bitmask = 1 << (7 - (null_indictor_index % 8));
+                nullIndicator[i / 8] = nullIndicator[i / 8] | bitmask;
+                continue;
+            }
+            switch (recordDescriptor[i].type)
+            {
+            case TypeInt:
+                if (con_attr) {
+                    uint32_t data_integer;
+                    memcpy(&data_integer, ((char *)data + offset), INT_SIZE);
+                    include = intCompare(&data_integer);
+                }
+                // uint32_t data_integer;
+                memcpy(((char *)return_data + offset), ((char *)data + offset), INT_SIZE);
+                offset += INT_SIZE;
+
+                // cout << "" << data_integer << endl;
+                break;
+            case TypeReal:
+                if (con_attr) {
+                    float data_real;
+                    memcpy(&data_real, ((char *)data + offset), REAL_SIZE);
+                    include = floatCompare(&data_integer);
+                }
+                // float data_real;
+                memcpy(((char *)return_data + offset), ((char *)data + offset), REAL_SIZE);
+                offset += REAL_SIZE;
+
+                // cout << "" << data_real << endl;
+                break;
+            case TypeVarChar:
+                if (con_attr) {
+                    uint32_t varcharSize;
+                    memcpy(&varcharSize, ((char *)data + offset), VARCHAR_LENGTH_SIZE);
+
+                    char *data_string = (char *)malloc(varcharSize + 1);
+                    if (data_string == NULL)
+                        return RBFM_MALLOC_FAILED;
+                    memcpy(data_string, ((char *)data + offset), varcharSize);
+                    data_string[varcharSize] = '\0';
+
+
+                    include = stringCompare(data_string, varcharSize);
+                }
+                // First VARCHAR_LENGTH_SIZE bytes describe the varchar length
+                uint32_t varcharSize;
+                memcpy(varcharSize, ((char *)data + offset), VARCHAR_LENGTH_SIZE);
+                memcpy(((char *)return_data + offset), ((char *)data + offset), VARCHAR_LENGTH_SIZE);
+                offset += VARCHAR_LENGTH_SIZE;
+
+                // // Gets the actual string.
+                // char *data_string = (char *)malloc(varcharSize + 1);
+                // if (data_string == NULL)
+                //     return RBFM_MALLOC_FAILED;
+                memcpy(((char *)return_data + offset), ((char *)data + offset), varcharSize);
+                break;
+            }
+            null_indictor_index += 1;
+        }
+        else {
+            continue;
+        }
+    }
+    length_of_record_to_return = offset;
+    // cout << "----" << endl;
+    if (!flagFound) {
+        // condition attribute does not exist in this record descriptor
+        return -50;
+    }
+    if (!include) {
+        return DO_NOT_INCLUDE;
+    }
     return SUCCESS;
 }
 
@@ -826,18 +959,82 @@ void RBFM_ScanIterator::Open(FileHandle &fileHandle, const vector<Attribute> &re
 RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data)
 {
     /* cerr << "getNextRecord: We believe there are: " << totalPages << " totalPages." << endl; */
+    // while (this->pageNum < this->totalPages)
+    // {
+    //     /* cerr << "Trying to read page num: " << pageNum << endl; */
+    //     if (this->recordNum == 0)
+    //     {
+    //         if (this->fileHandle->readPage(this->pageNum, this->pageData))
+    //             return RBFM_READ_FAILED;
+
+    //         SlotDirectoryHeader header = rbfm->getSlotDirectoryHeader(this->pageData);
+    //         this->totalRecordEntries = header.recordEntriesNumber;
+    //         /* this->recordNum = 0; */
+    //     }
+
+    //     SlotDirectoryRecordEntry recordEntry;
+    //     while (this->recordNum < this->totalRecordEntries)
+    //     {
+    //         recordEntry = rbfm->getSlotDirectoryRecordEntry(this->pageData, this->recordNum);
+    //         if (recordEntry.length < 0)
+    //         {
+    //             this->recordNum++;
+    //             continue;
+    //         }
+
+    //         if (recordEntry.offset < 0)
+    //         {
+    //             this->recordNum++;
+    //             continue;
+    //         }
+
+    //         if (!acceptRecord(recordEntry.offset))
+    //         {
+    //             this->recordNum++;
+    //             continue;
+    //         }
+
+    //         memcpy(data, (char *)pageData + recordEntry.offset, recordEntry.length);
+
+    //         if (formatRecord(data, *recordDescriptor, *attributeNames)) {
+    //             cerr << "getNextRecord: Error formatting record. Skipping RID with pageNum: " << pageNum << ", recordNum: " << recordNum << endl;
+    //             this->recordNum++;
+    //             continue;
+    //         }
+
+    //         // We wrote in the data!
+    //         rid.pageNum = pageNum;
+    //         rid.slotNum = recordNum;
+    //         cerr << "We returned an RID with pageNum: " << pageNum << " and recordNum: " << recordNum << endl;
+
+    //         // Prep starting record num for next call.
+    //         this->recordNum++;
+    //         return SUCCESS;
+    //     }
+
+    //     // Increment the page number and reset the record num.
+    //     this->pageNum++;
+    //     this->recordNum = 0;
+    // }
+
+    // return RBFM_EOF;
+
+
+    // IMPLEMENTATION FOR TESTING PURPSOSES. 
+
+    /* cerr << "getNextRecord: We believe there are: " << totalPages << " totalPages." << endl; */
     while (this->pageNum < this->totalPages)
     {
         /* cerr << "Trying to read page num: " << pageNum << endl; */
-        if (this->recordNum == 0)
-        {
-            if (this->fileHandle->readPage(this->pageNum, this->pageData))
-                return RBFM_READ_FAILED;
+        // if (this->recordNum == 0)
+        // {
+        if (this->fileHandle->readPage(this->pageNum, this->pageData) != SUCCESS)
+            return RBFM_READ_FAILED;
 
-            SlotDirectoryHeader header = rbfm->getSlotDirectoryHeader(this->pageData);
-            this->totalRecordEntries = header.recordEntriesNumber;
-            /* this->recordNum = 0; */
-        }
+        SlotDirectoryHeader header = rbfm->getSlotDirectoryHeader(this->pageData);
+        this->totalRecordEntries = header.recordEntriesNumber;
+        /* this->recordNum = 0; */
+        // }
 
         SlotDirectoryRecordEntry recordEntry;
         while (this->recordNum < this->totalRecordEntries)
@@ -855,19 +1052,35 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data)
                 continue;
             }
 
-            if (!acceptRecord(recordEntry.offset))
-            {
-                this->recordNum++;
+            // if (!acceptRecord(recordEntry.offset))
+            // {
+            //     this->recordNum++;
+            //     continue;
+            // }
+            char* record_itself = (char*)malloc(PAGE_SIZE);
+            RID cur;
+            cur.pageNum = this->pageNum;
+            cur.slotNum = this->recordNum;
+            readRecord(*(this->fileHandle), *(this->recordDescriptor), cur, record_itself);
+            
+            uint32_t length_of_record_to_return = 0;
+            char* record_data = (char*)malloc(PAGE_SIZE);
+            memset(record_data, 0, PAGE_SIZE);
+
+            RC rc = my_format_record(*(this->recordDescriptor), record_itself, *attributeNames, record_data, this->conditionAttribute, this->compOp, &length_of_record_to_return);
+            if (rc == DO_NOT_INCLUDE) {
+                free(record_data);
+                free(record_itself);
+                this->recordNum += 1;
                 continue;
             }
+            memcpy(data, record_data, length_of_record_to_return);
 
-            memcpy(data, (char *)pageData + recordEntry.offset, recordEntry.length);
-
-            if (formatRecord(data, *recordDescriptor, *attributeNames)) {
-                cerr << "getNextRecord: Error formatting record. Skipping RID with pageNum: " << pageNum << ", recordNum: " << recordNum << endl;
-                this->recordNum++;
-                continue;
-            }
+            // if (formatRecord(data, *recordDescriptor, *attributeNames)) {
+            //     cerr << "getNextRecord: Error formatting record. Skipping RID with pageNum: " << pageNum << ", recordNum: " << recordNum << endl;
+            //     this->recordNum++;
+            //     continue;
+            // }
 
             // We wrote in the data!
             rid.pageNum = pageNum;
@@ -875,7 +1088,9 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data)
             cerr << "We returned an RID with pageNum: " << pageNum << " and recordNum: " << recordNum << endl;
 
             // Prep starting record num for next call.
-            this->recordNum++;
+            this->recordNum += 1;
+            free(record_data);
+            free(record_itself);
             return SUCCESS;
         }
 
@@ -885,6 +1100,9 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data)
     }
 
     return RBFM_EOF;
+
+
+
 }
 
 RC RBFM_ScanIterator::close()

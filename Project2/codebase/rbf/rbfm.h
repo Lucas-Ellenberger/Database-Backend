@@ -23,6 +23,7 @@
 #define RBFM_SLOT_ALR_DELETED 10
 #define RBFM_SLOT_DN_EXIST 11
 #define RBFM_READ_NULL_ATTR 12
+#define DO_NOT_INCLUDE -66
 
 using namespace std;
 
@@ -223,6 +224,7 @@ private:
   bool setFieldNull(char *nullIndicator, int fieldNum);
   unsigned getAttributeSize(const void *attributePtr, const Attribute &attribute);
   RC formatRecord(void *data, const vector<Attribute> &recordDescriptor, const vector<string> &attributeNames);
+  RC my_format_record(const vector<Attribute> &recordDescriptor, const void *data, const vector<string> &attributeNames, const void *return_data, const string &conditionAttribute, const CompOp compOp, uint32_t* length_of_record_to_return);
 };
 
 #endif
