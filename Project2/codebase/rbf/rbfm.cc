@@ -77,6 +77,7 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
     cerr << "insertRecord: Received the following data." << endl;
     printRecord(recordDescriptor, data);
     unsigned recordSize = getRecordSize(recordDescriptor, data);
+    cerr << "insertRecord: found the record length: " << recordSize << endl;
 
     // Cycles through pages looking for enough free space for the new entry.
     void *pageData = malloc(PAGE_SIZE);
@@ -128,11 +129,13 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
     // Adding the new record reference in the slot directory.
     newRecordEntry.length = recordSize;
     newRecordEntry.offset = slotHeader.freeSpaceOffset - recordSize;
+    cerr << "insertRecord: inserting an offset: " << newRecordEntry.offset << endl;
     setSlotDirectoryRecordEntry(pageData, rid.slotNum, newRecordEntry);
 
     // Updating the slot directory header.
     slotHeader.freeSpaceOffset = newRecordEntry.offset;
-    slotHeader.recordEntriesNumber += 1;
+    if (!foundSlot)
+        slotHeader.recordEntriesNumber += 1;
     setSlotDirectoryHeader(pageData, slotHeader);
 
     // Adding the record data.
@@ -580,6 +583,8 @@ RC RecordBasedFileManager::readAttribute(FileHandle &fileHandle, const vector<At
         free(pageData);
         return readAttribute(fileHandle, recordDescriptor, forwardingRid, attributeName, data);
     }
+    cerr << "readAttribute: found the record length: " << recordEntry.length << endl;
+    cerr << "readAttribute: found the record offset: " << recordEntry.offset << endl;
 
     // Points to start of record
     char *start = (char *)pageData + recordEntry.offset;
