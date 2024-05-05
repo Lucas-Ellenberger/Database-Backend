@@ -225,7 +225,7 @@ RC RelationManager::createTable(const string &tableName, const vector<Attribute>
     int num_attrs = attrs.size();
     for (int i = 0; i < num_attrs; i += 1)
     {
-        prepareColumnRecord(columnDescriptor.size(), nullsIndicatorColumn, 2, attrs[i].name.size(), attrs[i].name, attrs[i].type, attrs[i].length, i + 1, record, &recordSize); // not sure we actually need recordSize
+        prepareColumnRecord(columnDescriptor.size(), nullsIndicatorColumn, table_id_count, attrs[i].name.size(), attrs[i].name, attrs[i].type, attrs[i].length, i + 1, record, &recordSize); // not sure we actually need recordSize
         rc = catalog->insertRecord(columnHandle, columnDescriptor, record, rid);
         if (rc != SUCCESS)
         {
@@ -456,7 +456,18 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
     value = &tableIdValue;
 
     // Create scan iterator
-    rc = catalog->scan(columnFileHandle, columnDescriptor, "table-id", compOp, value, columnsAttributesToRead, columnsScanIterator);
+    string table_id = "table-id";
+    // cerr << "calling scan for column table in get attribute with values" << endl;
+    // // cerr << "column file handle: " << columnFileHandle << endl;
+    // cerr << "conditional attribute " << table_id << endl;
+    // cerr << "comp op" << compOp << endl;
+    // cerr << "value: " << *((int*)value) << endl;
+    // cerr << "column attributes are as follows" << endl;
+    // for (int i = 0; i < columnsAttributesToRead.size(); i += 1) {
+    //     cerr << columnsAttributesToRead[i] << endl;
+    // }
+    
+    rc = catalog->scan(columnFileHandle, columnDescriptor, table_id, compOp, value, columnsAttributesToRead, columnsScanIterator);
     if (rc != SUCCESS)
     {
         cerr << "getAttributes: scan failed." << endl;
@@ -467,8 +478,10 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
 
     // Iterates through Columns table and adds matched attributes corresponding to tableID
     Attribute attr;
+    // cerr << "calling column scan get next record" << endl;
     while (columnsScanIterator.getNextRecord(rid, data) != RBFM_EOF)
     {
+        // cerr << "got to this point 2" << endl;
         int offset = int(ceil((double)columnDescriptor.size() / CHAR_BIT)); // Offset accounting for empty nullindicator
 
         // Grabs name of attribute
