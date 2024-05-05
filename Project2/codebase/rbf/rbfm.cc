@@ -181,7 +181,8 @@ RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const vector<Attri
     {
         // This is a forwarding address.
         RID newRID;
-        newRID.pageNum = (recordEntry.offset * -1);
+        newRID.pageNum = recordEntry.offset & retreivemask;
+        /* newRID.pageNum = (recordEntry.offset * -1); */
         newRID.slotNum = recordEntry.length;
         free(pageData);
         return readRecord(fileHandle, recordDescriptor, newRID, data);
@@ -294,7 +295,8 @@ RC RecordBasedFileManager::deleteRecord(FileHandle &fileHandle, const vector<Att
     {
         // This is a forwarding address.
         RID newRID;
-        newRID.pageNum = (recordEntry.offset * -1); // we need to be very careful about how we are defining the record offset.
+        newRID.pageNum = recordEntry.offset & retreivemask;
+        /* newRID.pageNum = (recordEntry.offset * -1); // we need to be very careful about how we are defining the record offset. */
                                                     // If it is negative, we can either just set the final bit to 1, or we can multiply by -1.
                                                     // these are likely not equivalent b/c Two's complement. So like... pick one
         newRID.slotNum = recordEntry.length;        // we shouldnt need to screw with the length, we just need to make sure that the MSB is only used
@@ -562,7 +564,8 @@ RC RecordBasedFileManager::readAttribute(FileHandle &fileHandle, const vector<At
     if (recordEntry.offset < 0)
     {
         RID forwardingRid;
-        forwardingRid.pageNum = recordEntry.offset * -1;
+        /* forwardingRid.pageNum = recordEntry.offset * -1; */
+        forwardingRid.pageNum = recordEntry.offset & retrievemask;
         forwardingRid.slotNum = recordEntry.length;
         free(pageData);
         return readAttribute(fileHandle, recordDescriptor, forwardingRid, attributeName, data);
