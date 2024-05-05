@@ -257,7 +257,7 @@ RC RelationManager::deleteTable(const string &tableName)
 
     // Check if table file exists
     FileHandle tableFileHandle;
-    RC rc = catalog->openFile(tableName, tableFileHandle);
+    RC rc = catalog->openFile("Tables", tableFileHandle);
     if (rc != SUCCESS)
     {
         return rc;
@@ -299,6 +299,7 @@ RC RelationManager::deleteTable(const string &tableName)
     // If table does not exist
     if (!found)
     {
+        cerr << "table not found" << endl;
         free(data);
         return 4;
     }
@@ -356,6 +357,7 @@ RC RelationManager::deleteTable(const string &tableName)
 
     //loop through all stored RIDs in the Columns table that need to be deleted and delete them
     for (unsigned i = 0; i < column_rids_to_delete.size(); i += 1){
+        cerr << "rid pageNum: " << column_rids_to_delete[i].pageNum << endl << "rid slotNum " << column_rids_to_delete[i].slotNum << endl;
         rc = deleteTuple("Columns", column_rids_to_delete[i]);
         if (rc != SUCCESS) {
             free(data);
@@ -518,7 +520,7 @@ RC RelationManager::insertTuple(const string &tableName, const void *data, RID &
     }
 
     FileHandle tableFileHandle;
-    RC rc = catalog->openFile(tableName, tableFileHandle);
+    RC rc = catalog->openFile("Tables", tableFileHandle);
     if (rc != SUCCESS)
     {
         return rc; // Failed to open the file
@@ -545,8 +547,8 @@ RC RelationManager::deleteTuple(const string &tableName, const RID &rid)
     }
 
     // Open file corresponding to the table name
-    FileHandle tableFileHandle;
-    RC rc = catalog->openFile(tableName, tableFileHandle);
+    FileHandle handle;
+    RC rc = catalog->openFile(tableName, handle);
     if (rc != SUCCESS)
     {
         return rc;
@@ -555,8 +557,8 @@ RC RelationManager::deleteTuple(const string &tableName, const RID &rid)
     vector<Attribute> recordDescriptor; // Empty recordDescriptor since deleteRecord doesn't use it
 
     // Delete the record from the file
-    rc = catalog->deleteRecord(tableFileHandle, recordDescriptor, rid);
-    catalog->closeFile(tableFileHandle); // Always close the file handle regardless of the outcome
+    rc = catalog->deleteRecord(handle, recordDescriptor, rid);
+    catalog->closeFile(handle); // Always close the file handle regardless of the outcome
 
     if (rc != SUCCESS)
     {
@@ -660,18 +662,18 @@ RC RelationManager::readAttribute(const string &tableName, const RID &rid, const
         return rc;
     }
     
-    cerr << "printing out record descriptor" << endl;
-    cerr << "sizeof record descriptor" << recordDescriptor.size() << endl;
-    for (int i = 0; i < recordDescriptor.size(); i += 1) {
-        cerr << "name: " << recordDescriptor[i].name << endl;
-        cerr << "type: " << recordDescriptor[i].type << endl;
-        cerr << "length: " << recordDescriptor[i].length << endl;
-    }
+    // cerr << "printing out record descriptor" << endl;
+    // cerr << "sizeof record descriptor" << recordDescriptor.size() << endl;
+    // for (int i = 0; i < recordDescriptor.size(); i += 1) {
+    //     cerr << "name: " << recordDescriptor[i].name << endl;
+    //     cerr << "type: " << recordDescriptor[i].type << endl;
+    //     cerr << "length: " << recordDescriptor[i].length << endl;
+    // }
 
-    cerr << "printing from RM read attr" << endl;
-    void* temp = malloc(PAGE_SIZE);
-    catalog->readRecord(handle, recordDescriptor, rid, temp);
-    catalog->printRecord(recordDescriptor, temp);
+    // cerr << "printing from RM read attr" << endl;
+    // void* temp = malloc(PAGE_SIZE);
+    // catalog->readRecord(handle, recordDescriptor, rid, temp);
+    // catalog->printRecord(recordDescriptor, temp);
 
     rc = catalog->readAttribute(handle, recordDescriptor, rid, attributeName, data);
     if (rc != SUCCESS) {

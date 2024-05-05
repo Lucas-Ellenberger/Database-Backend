@@ -364,7 +364,7 @@ RC RecordBasedFileManager::deleteRecord(FileHandle &fileHandle, const vector<Att
 
 RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const void *data, const RID &rid)
 {
-    cerr << "updateRecord: starting rid.pageNum: " << rid.pageNum << " rid.slotNum: " << rid.slotNum << endl;
+    // cerr << "updateRecord: starting rid.pageNum: " << rid.pageNum << " rid.slotNum: " << rid.slotNum << endl;
     /* cerr << "updateRecord: We are trying to write in:" << endl; */
     /* printRecord(recordDescriptor, data); */
     // Retrieve the specified page
@@ -453,11 +453,11 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
 
         // Preps RecordEntry to be inserted in directory
         SlotDirectoryRecordEntry newEntry;
-        cerr << "bitmask: " << bitmask << endl;
-        cerr << "updateRecord: after insert: forwardingRid.pageNum: " << forwardingRid.pageNum << endl;
+        // cerr << "bitmask: " << bitmask << endl;
+        // cerr << "updateRecord: after insert: forwardingRid.pageNum: " << forwardingRid.pageNum << endl;
         newEntry.offset = forwardingRid.pageNum | bitmask;
         newEntry.length = forwardingRid.slotNum;      // Sets slot num of forwarded address
-        cerr << "updateRecord: after insert: newEntry.offset: " << newEntry.offset << endl;
+        // cerr << "updateRecord: after insert: newEntry.offset: " << newEntry.offset << endl;
         /* newEntry.offset = forwardingRid.pageNum * -1; // Multiply by -1 to set forwarding flag */
         /* newEntry.length = forwardingRid.slotNum;      // Sets slot num of forwarded address */
 
@@ -549,11 +549,11 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
 
 RC RecordBasedFileManager::readAttribute(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const RID &rid, const string &attributeName, void *data)
 {
-    cerr << "they gave an rid, pagnum: " << rid.pageNum << " slotnum: " << rid.slotNum << endl;
-    void* my_temp = malloc(PAGE_SIZE);
-    readRecord(fileHandle, recordDescriptor, rid, my_temp);
-    cerr << "printing record at start of read attr" << endl;
-    printRecord(recordDescriptor, my_temp);
+    // cerr << "they gave an rid, pagnum: " << rid.pageNum << " slotnum: " << rid.slotNum << endl;
+    // void* my_temp = malloc(PAGE_SIZE);
+    // readRecord(fileHandle, recordDescriptor, rid, my_temp);
+    // cerr << "printing record at start of read attr" << endl;
+    // printRecord(recordDescriptor, my_temp);
     // Retrieve the specified page
     void *pageData = malloc(PAGE_SIZE);
     if (pageData == NULL)
