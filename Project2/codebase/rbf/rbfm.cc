@@ -978,7 +978,7 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data)
 
 RC RBFM_ScanIterator::my_format_record(const vector<Attribute> &recordDescriptor, const void *data, const vector<string> &attributeNames, const void *return_data, const string &conditionAttribute, const CompOp compOp, uint32_t* length_of_record_to_return)
 {
-    rbfm->printRecord(recordDescriptor, data);
+    /* rbfm->printRecord(recordDescriptor, data); */
     // Parse the null indicator and save it into an array.
     int nullIndicatorSize = rbfm->getNullIndicatorSize(recordDescriptor.size());
     char nullIndicator[nullIndicatorSize];
@@ -1088,6 +1088,7 @@ RC RBFM_ScanIterator::my_format_record(const vector<Attribute> &recordDescriptor
                 ret_offset += varcharSize;
                 break;
             }
+
             null_indictor_index += 1;
         }
         else {
@@ -1107,8 +1108,8 @@ RC RBFM_ScanIterator::my_format_record(const vector<Attribute> &recordDescriptor
             continue;
         }
     }
-    rbfm->printRecord(myAttrs, return_data);
-    cerr << "include flag: " << include << endl;
+    /* rbfm->printRecord(myAttrs, return_data); */
+    /* cerr << "include flag: " << include << endl; */
     *length_of_record_to_return = ret_offset;
     // cout << "----" << endl;
     if (!flagFound) {

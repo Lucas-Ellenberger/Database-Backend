@@ -381,6 +381,7 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
     // Check if catalog has been created
     if (catalog == NULL)
     {
+        cerr << "getAttributes: catalog is null." << endl;
         return CATALOG_DSN_EXIST;
     }
 
@@ -389,6 +390,7 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
     RC rc = catalog->openFile(table, tableFileHandle);
     if (rc != SUCCESS)
     {
+        cerr << "getAttributes: open file failure." << endl;
         return rc;
     }
 
@@ -405,6 +407,7 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
     rc = catalog->scan(tableFileHandle, tableDescriptor, conditionAttribute, compOp, value, tablesAttributesToRead, tablesScanIterator);
     if (rc != SUCCESS)
     {
+        cerr << "getAttributes: scan failed." << endl;
         catalog->closeFile(tableFileHandle);
         return 3;
     }
@@ -416,6 +419,7 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
     bool found = false;
     while (tablesScanIterator.getNextRecord(rid, data) != RBFM_EOF)
     {
+        /* rbfm->readRecord(tableFileHandle, tablesAttributesToRead, ) */
         int offset = int(ceil((double)tablesAttributesToRead.size() / CHAR_BIT)); // Have to account for empty nullIndicator
         memcpy(&tableID, (char *)data + offset, sizeof(int));              // Grabs tableID
         found = true;
@@ -428,6 +432,7 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
     // If table does not exist
     if (!found)
     {
+        cerr << "getAttributes: table not found." << endl;
         free(data);
         return 4;
     }
@@ -437,6 +442,7 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
     rc = catalog->openFile("Columns", columnFileHandle);
     if (rc != SUCCESS)
     {
+        cerr << "getAttributes: column table couldn't open." << endl;
         free(data);
         return 5;
     }
@@ -453,6 +459,7 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
     rc = catalog->scan(columnFileHandle, columnDescriptor, "table-id", compOp, value, columnsAttributesToRead, columnsScanIterator);
     if (rc != SUCCESS)
     {
+        cerr << "getAttributes: scan failed." << endl;
         catalog->closeFile(columnFileHandle);
         free(data);
         return 6;
@@ -487,7 +494,7 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
     columnsScanIterator.close();
     catalog->closeFile(columnFileHandle);
     free(data);
-    return 0;
+    return SUCCESS;
 }
 
 RC RelationManager::insertTuple(const string &tableName, const void *data, RID &rid)
