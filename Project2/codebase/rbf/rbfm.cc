@@ -5,6 +5,8 @@
 #include <string.h>
 #include <iomanip>
 
+
+
 RecordBasedFileManager *RecordBasedFileManager::_rbf_manager = NULL;
 PagedFileManager *RecordBasedFileManager::_pf_manager = NULL;
 
@@ -246,6 +248,137 @@ RC RecordBasedFileManager::printRecord(const vector<Attribute> &recordDescriptor
     }
     cout << "----" << endl;
 
+    return SUCCESS;
+}
+
+RC RBFM_ScanIterator::my_format_record(const vector<Attribute> &recordDescriptor, const void *data, const vector<string> &attributeNames, const void *return_data, const string &conditionAttribute, const CompOp compOp, uint32_t* length_of_record_to_return)
+{
+    // Parse the null indicator and save it into an array.
+    int nullIndicatorSize = rbfm->getNullIndicatorSize(attributeNames.size());
+    char nullIndicator[nullIndicatorSize];
+    memset(nullIndicator, 0, nullIndicatorSize);
+    memcpy(nullIndicator, data, nullIndicatorSize);
+    int null_indictor_index = 0;
+    // We've read in the null indicator, so we can skip past it now
+    unsigned offset = nullIndicatorSize;
+
+    // cout << "----" << endl;
+    bool flagFound = false;
+    bool include = false;
+
+    for (unsigned i = 0; i < (unsigned)recordDescriptor.size(); i++) {
+        if (recordDescriptor[i].name == conditionAttribute) {
+            flagFound = true;
+            switch (recordDescriptor[i].type) {
+                case TypeInt:
+                    
+                    break;
+                case TypeReal:
+                    break;
+                case TypeVarChar:
+                    break;
+            }
+        }
+        else {
+            continue;
+        }
+    }
+
+
+    for (unsigned i = 0; i < (unsigned)recordDescriptor.size(); i++)
+    {
+        // cout << setw(10) << left << recordDescriptor[i].name << ": ";
+        // If the field is null, don't print it
+        bool in_set = false;
+        bool con_attr = false;
+        
+        for (int i = 0; i < attributeNames.size(); i += 1){
+            if(recordDescriptor[i].name == attributeNames[i])
+                in_set = true;
+            if(recordDescriptor[i].name == conditionAttribute) {
+                con_attr = true;
+                flagFound = true;
+            }
+            else {
+                con_attr = false;
+            }
+        }
+        if(in_set) {
+            bool isNull = rbfm->fieldIsNull(nullIndicator, i);
+            // if the current attribute is NULL, just push the null bit and then continue to next attribute
+            if (isNull) {
+                uint8_t bitmask = 1 << (7 - (null_indictor_index % 8));
+                nullIndicator[i / 8] = nullIndicator[i / 8] | bitmask;
+                continue;
+            }
+            switch (recordDescriptor[i].type)
+            {
+            case TypeInt:
+                if (con_attr) {
+                    int data_integer;
+                    memcpy(&data_integer, ((char *)data + offset), INT_SIZE);
+                    include = intCompare(&data_integer);
+                }
+                // uint32_t data_integer;
+                memcpy(((char *)return_data + offset), ((char *)data + offset), INT_SIZE);
+                offset += INT_SIZE;
+
+                // cout << "" << data_integer << endl;
+                break;
+            case TypeReal:
+                if (con_attr) {
+                    float data_real;
+                    memcpy(&data_real, ((char *)data + offset), REAL_SIZE);
+                    include = floatCompare(&data_real);
+                }
+                // float data_real;
+                memcpy(((char *)return_data + offset), ((char *)data + offset), REAL_SIZE);
+                offset += REAL_SIZE;
+
+                // cout << "" << data_real << endl;
+                break;
+            case TypeVarChar:
+                if (con_attr) {
+                    unsigned varcharSize;
+                    memcpy(&varcharSize, ((char *)data + offset), VARCHAR_LENGTH_SIZE);
+
+                    char *data_string = (char *)malloc(varcharSize + 1);
+                    if (data_string == NULL)
+                        return RBFM_MALLOC_FAILED;
+                    memcpy(data_string, ((char *)data + offset), varcharSize);
+                    data_string[varcharSize] = '\0';
+
+
+                    include = stringCompare(data_string, varcharSize);
+                }
+                // First VARCHAR_LENGTH_SIZE bytes describe the varchar length
+                unsigned varcharSize;
+                memcpy(&varcharSize, ((char *)data + offset), VARCHAR_LENGTH_SIZE);
+                memcpy(((char *)return_data + offset), ((char *)data + offset), VARCHAR_LENGTH_SIZE);
+                offset += VARCHAR_LENGTH_SIZE;
+
+                // // Gets the actual string.
+                // char *data_string = (char *)malloc(varcharSize + 1);
+                // if (data_string == NULL)
+                //     return RBFM_MALLOC_FAILED;
+                memcpy(((char *)return_data + offset), ((char *)data + offset), varcharSize);
+                break;
+            }
+            null_indictor_index += 1;
+        }
+        else {
+            continue;
+        }
+    }
+    *length_of_record_to_return = offset;
+    // cout << "----" << endl;
+    if (!flagFound) {
+        // condition attribute does not exist in this record descriptor
+        return -50;
+    }
+    if (!include) {
+        return DO_NOT_INCLUDE;
+    }
     return SUCCESS;
 }
 
@@ -815,6 +948,9 @@ void RBFM_ScanIterator::Open(FileHandle &fileHandle, const vector<Attribute> &re
     this->compOp = compOp;
     this->value = value;
     this->attributeNames = &attributeNames;
+    this->pageData = malloc(PAGE_SIZE);
+    if (pageData == NULL)
+        cerr << "Open: unable to malloc pageData." << endl;
 }
 
 // Never keep the results in the memory. When getNextRecord() is called,
@@ -822,17 +958,83 @@ void RBFM_ScanIterator::Open(FileHandle &fileHandle, const vector<Attribute> &re
 // "data" follows the same format as RecordBasedFileManager::insertRecord().
 RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data)
 {
+    /* cerr << "getNextRecord: We believe there are: " << totalPages << " totalPages." << endl; */
+    // while (this->pageNum < this->totalPages)
+    // {
+    //     /* cerr << "Trying to read page num: " << pageNum << endl; */
+    //     if (this->recordNum == 0)
+    //     {
+    //         if (this->fileHandle->readPage(this->pageNum, this->pageData))
+    //             return RBFM_READ_FAILED;
+
+    //         SlotDirectoryHeader header = rbfm->getSlotDirectoryHeader(this->pageData);
+    //         this->totalRecordEntries = header.recordEntriesNumber;
+    //         /* this->recordNum = 0; */
+    //     }
+
+    //     SlotDirectoryRecordEntry recordEntry;
+    //     while (this->recordNum < this->totalRecordEntries)
+    //     {
+    //         recordEntry = rbfm->getSlotDirectoryRecordEntry(this->pageData, this->recordNum);
+    //         if (recordEntry.length < 0)
+    //         {
+    //             this->recordNum++;
+    //             continue;
+    //         }
+
+    //         if (recordEntry.offset < 0)
+    //         {
+    //             this->recordNum++;
+    //             continue;
+    //         }
+
+    //         if (!acceptRecord(recordEntry.offset))
+    //         {
+    //             this->recordNum++;
+    //             continue;
+    //         }
+
+    //         memcpy(data, (char *)pageData + recordEntry.offset, recordEntry.length);
+
+    //         if (formatRecord(data, *recordDescriptor, *attributeNames)) {
+    //             cerr << "getNextRecord: Error formatting record. Skipping RID with pageNum: " << pageNum << ", recordNum: " << recordNum << endl;
+    //             this->recordNum++;
+    //             continue;
+    //         }
+
+    //         // We wrote in the data!
+    //         rid.pageNum = pageNum;
+    //         rid.slotNum = recordNum;
+    //         cerr << "We returned an RID with pageNum: " << pageNum << " and recordNum: " << recordNum << endl;
+
+    //         // Prep starting record num for next call.
+    //         this->recordNum++;
+    //         return SUCCESS;
+    //     }
+
+    //     // Increment the page number and reset the record num.
+    //     this->pageNum++;
+    //     this->recordNum = 0;
+    // }
+
+    // return RBFM_EOF;
+
+
+    // IMPLEMENTATION FOR TESTING PURPSOSES. 
+
+    /* cerr << "getNextRecord: We believe there are: " << totalPages << " totalPages." << endl; */
     while (this->pageNum < this->totalPages)
     {
-        if (this->recordNum == 0)
-        {
-            if (this->fileHandle->readPage(this->pageNum, this->pageData))
-                return RBFM_READ_FAILED;
+        /* cerr << "Trying to read page num: " << pageNum << endl; */
+        // if (this->recordNum == 0)
+        // {
+        if (this->fileHandle->readPage(this->pageNum, this->pageData) != SUCCESS)
+            return RBFM_READ_FAILED;
 
-            SlotDirectoryHeader header = rbfm->getSlotDirectoryHeader(this->pageData);
-            this->totalRecordEntries = header.recordEntriesNumber;
-            this->recordNum = 0;
-        }
+        SlotDirectoryHeader header = rbfm->getSlotDirectoryHeader(this->pageData);
+        this->totalRecordEntries = header.recordEntriesNumber;
+        /* this->recordNum = 0; */
+        // }
 
         SlotDirectoryRecordEntry recordEntry;
         while (this->recordNum < this->totalRecordEntries)
@@ -850,90 +1052,46 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data)
                 continue;
             }
 
-            if (!acceptRecord(recordEntry.offset))
-            {
-                this->recordNum++;
+            // if (!acceptRecord(recordEntry.offset))
+            // {
+            //     this->recordNum++;
+            //     continue;
+            // }
+            char* record_itself = (char*)malloc(PAGE_SIZE);
+            RID cur;
+            cur.pageNum = this->pageNum;
+            cur.slotNum = this->recordNum;
+            rbfm->readRecord(*(this->fileHandle), *(this->recordDescriptor), cur, record_itself);
+            
+            unsigned length_of_record_to_return = 0;
+            char* record_data = (char*)malloc(PAGE_SIZE);
+            memset(record_data, 0, PAGE_SIZE);
+
+            RC rc = my_format_record(*(this->recordDescriptor), record_itself, *attributeNames, record_data, *conditionAttribute, this->compOp, &length_of_record_to_return);
+            if (rc == DO_NOT_INCLUDE) {
+                free(record_data);
+                free(record_itself);
+                this->recordNum += 1;
                 continue;
             }
+            memcpy(data, record_data, length_of_record_to_return);
 
-            char *start = (char *)this->pageData + recordEntry.offset;
-
-            if (formatRecord((void *) start, *recordDescriptor, *attributeNames)) {
-                cerr << "getNextRecord: Error formatting record. Skipping RID with pageNum: " << pageNum << ", recordNum: " << recordNum << endl;
-                this->recordNum++;
-                continue;
-            }
+            // if (formatRecord(data, *recordDescriptor, *attributeNames)) {
+            //     cerr << "getNextRecord: Error formatting record. Skipping RID with pageNum: " << pageNum << ", recordNum: " << recordNum << endl;
+            //     this->recordNum++;
+            //     continue;
+            // }
 
             // We wrote in the data!
             rid.pageNum = pageNum;
             rid.slotNum = recordNum;
+            cerr << "We returned an RID with pageNum: " << pageNum << " and recordNum: " << recordNum << endl;
 
             // Prep starting record num for next call.
-            this->recordNum++;
+            this->recordNum += 1;
+            free(record_data);
+            free(record_itself);
             return SUCCESS;
-
-
-            // Pointer to start of record
-            /* char *start = (char *)this->pageData + recordEntry.offset; */
-
-            /* // Allocate space for null indicator. */
-            /* int newNullIndicatorSize = rbfm->getNullIndicatorSize(this->attributeNames->size()); */
-            /* char newNullIndicator[newNullIndicatorSize]; */
-            /* memset(newNullIndicator, 0, newNullIndicatorSize); */
-
-            /* // Allocate space for null indicator. */
-            /* int nullIndicatorSize = rbfm->getNullIndicatorSize(this->recordDescriptor->size()); */
-            /* char nullIndicator[nullIndicatorSize]; */
-            /* memset(nullIndicator, 0, nullIndicatorSize); */
-
-            /* // Get number of columns and size of the null indicator for this record */
-            /* RecordLength len = 0; */
-            /* memcpy(&len, start, sizeof(RecordLength)); */
-            /* int recordNullIndicatorSize = rbfm->getNullIndicatorSize(len); */
-            /* // Read in the existing null indicator */
-            /* memcpy(nullIndicator, start + sizeof(RecordLength), recordNullIndicatorSize); */
-
-            /* // Initialize some offsets */
-            /* // rec_offset: points to data in the record. We move this forward as we read data from our record */
-            /* unsigned rec_offset = sizeof(RecordLength) + recordNullIndicatorSize + len * sizeof(ColumnOffset); */
-            /* // data_offset: points to our current place in the output data. We move this forward as we write to data. */
-            /* unsigned data_offset = nullIndicatorSize; */
-            /* // directory_base: points to the start of our directory of indices */
-            /* char *directory_base = start + sizeof(RecordLength) + recordNullIndicatorSize; */
-
-            /* unsigned newNullIndex = 0; */
-            /* for (unsigned i = 0; i < recordDescriptor->size(); i++) */
-            /* { */
-            /*     if (rbfm->fieldIsNull(nullIndicator, i)) */
-            /*     { */
-            /*         if (std::find(attributeNames.begin(), attributeNames.end(), )) */
-            /*         { */
-            /*         } */
-            /*         // TODO: Set NULL indicator. */
-            /*         newNullIndex++; */
-            /*         continue; */
-            /*     } */
-
-            /*     // Grab pointer to end of this column */
-            /*     ColumnOffset endPointer; */
-            /*     memcpy(&endPointer, directory_base + i * sizeof(ColumnOffset), sizeof(ColumnOffset)); */
-
-            /*     // rec_offset keeps track of start of column, so end-start = total size */
-            /*     uint32_t fieldSize = endPointer - rec_offset; */
-
-            /*     // Special case for varchar, we must give data the size of varchar first */
-            /*     if ((*recordDescriptor)[i].type == TypeVarChar) */
-            /*     { */
-            /*         memcpy((char *)data + data_offset, &fieldSize, VARCHAR_LENGTH_SIZE); */
-            /*         data_offset += VARCHAR_LENGTH_SIZE; */
-            /*     } */
-            /*     // Next we copy bytes equal to the size of the field and increase our offsets */
-            /*     memcpy((char *)data + data_offset, start + rec_offset, fieldSize); */
-            /*     rec_offset += fieldSize; */
-            /*     data_offset += fieldSize; */
-            /* } */
-
-            /* this->recordNum++; */
         }
 
         // Increment the page number and reset the record num.
@@ -941,12 +1099,10 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data)
         this->recordNum = 0;
     }
 
-    // TODO:
-    // If it does, construct data to have the reduced number of null indicators.
-    // Then, write in only the correct fields.
-    // Use read record and read attribute as guides.
-
     return RBFM_EOF;
+
+
+
 }
 
 RC RBFM_ScanIterator::close()
@@ -1018,13 +1174,16 @@ bool RBFM_ScanIterator::acceptRecord(unsigned offset)
 
                 return floatCompare(&data_real);
             case TypeVarChar:
-                uint32_t varcharSize;
+                int varcharSize;
                 memcpy(&varcharSize, ((char *)pageData + data_offset), VARCHAR_LENGTH_SIZE);
                 data_offset += VARCHAR_LENGTH_SIZE;
                 // Gets the actual string.
+                cerr << "acceptRecord: found a varchar of size: " << varcharSize << endl;
                 char *data_string = (char *)malloc(varcharSize + 1);
-                if (data_string == NULL)
-                    return RBFM_MALLOC_FAILED;
+                if (data_string == NULL) {
+                    cerr << "acceptRecord: Unable to malloc data_string." << endl;
+                    return false;
+                }
 
                 memcpy(data_string, ((char *)pageData + data_offset), varcharSize);
 
