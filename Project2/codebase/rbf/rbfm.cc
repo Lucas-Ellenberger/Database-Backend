@@ -74,8 +74,8 @@ RC RecordBasedFileManager::closeFile(FileHandle &fileHandle)
 RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const void *data, RID &rid)
 {
     // Gets the size of the record.
-    /* cerr << "insertRecord: Received the following data." << endl; */
-    /* printRecord(recordDescriptor, data); */
+    cerr << "insertRecord: Received the following data." << endl;
+    printRecord(recordDescriptor, data);
     unsigned recordSize = getRecordSize(recordDescriptor, data);
 
     // Cycles through pages looking for enough free space for the new entry.
@@ -149,6 +149,8 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
         if (fileHandle.appendPage(pageData))
             return RBFM_APPEND_FAILED;
     }
+
+    cerr << "insertRecord: returned rid, pageNum: " << rid.pageNum << " slotNum: " << rid.slotNum << endl;
 
     free(pageData);
     return SUCCESS;
@@ -541,6 +543,7 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
 
 RC RecordBasedFileManager::readAttribute(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const RID &rid, const string &attributeName, void *data)
 {
+    cerr << "they gave an rid, pagnum: " << rid.pageNum << " slotnum: " << rid.slotNum << endl;
     // Retrieve the specified page
     void *pageData = malloc(PAGE_SIZE);
     if (pageData == NULL)
@@ -565,7 +568,7 @@ RC RecordBasedFileManager::readAttribute(FileHandle &fileHandle, const vector<At
     {
         RID forwardingRid;
         /* forwardingRid.pageNum = recordEntry.offset * -1; */
-        forwardingRid.pageNum = recordEntry.offset & retrievemask;
+        forwardingRid.pageNum = recordEntry.offset & retreivemask;
         forwardingRid.slotNum = recordEntry.length;
         free(pageData);
         return readAttribute(fileHandle, recordDescriptor, forwardingRid, attributeName, data);
@@ -585,7 +588,7 @@ RC RecordBasedFileManager::readAttribute(FileHandle &fileHandle, const vector<At
     int recordNullIndicatorSize = getNullIndicatorSize(len);
 
     // Read in the existing null indicator
-    memcpy(nullIndicator, (char *)pageData, nullIndicatorSize);
+    memcpy(nullIndicator, start + sizeof(RecordLength), nullIndicatorSize);
 
     // If this new recordDescriptor has had fields added to it, we set all of the new fields to null
     for (unsigned i = len; i < recordDescriptor.size(); i++)
@@ -602,18 +605,28 @@ RC RecordBasedFileManager::readAttribute(FileHandle &fileHandle, const vector<At
     // rec_offset: points to data in the record. We move this forward as we read data from our record
     unsigned rec_offset = sizeof(RecordLength) + recordNullIndicatorSize + len * sizeof(ColumnOffset);
     // data_offset: points to our current place in the output data. We move this forward as we write to data.
-    unsigned data_offset = nullIndicatorSize;
+    unsigned data_offset = sizeof(char);
     // directory_base: points to the start of our directory of indices
     char *directory_base = start + sizeof(RecordLength) + recordNullIndicatorSize;
+    void *temp = malloc(PAGE_SIZE);
+    cerr << "rid we give to readRecord: pagnum: " << rid.pageNum << " slotnum: " << rid.slotNum << endl;
+    if (readRecord(fileHandle, recordDescriptor, rid, temp))
+        cerr << "read failed." << endl;
+    printRecord(recordDescriptor, temp);
 
     unsigned i = 0;
     for (i = 0; i < recordDescriptor.size(); i++)
     {
         if (recordDescriptor[i].name == attributeName)
         {
-            // TODO: Write out a null bit indicator only!
-            if (fieldIsNull(nullIndicator, i))
-                break;
+            cerr << "We found the attribue." << endl;
+            if (fieldIsNull(nullIndicator, i)) {
+                cerr << "The attribue is null." << endl;
+                char val = 0x80;
+                memcpy(data, &val, 1);
+                free(pageData);
+                return SUCCESS;
+            }
 
             ColumnOffset endPointer;
             memcpy(&endPointer, directory_base + i * sizeof(ColumnOffset), sizeof(ColumnOffset));
@@ -625,12 +638,14 @@ RC RecordBasedFileManager::readAttribute(FileHandle &fileHandle, const vector<At
             uint32_t fieldSize = endPointer - rec_offset;
 
             // Special case for varchar, we must give data the size of varchar first
-            if (recordDescriptor[i].type == TypeVarChar)
-            {
-                memcpy((char *)data + data_offset, &fieldSize, VARCHAR_LENGTH_SIZE);
-                data_offset += VARCHAR_LENGTH_SIZE;
-            }
+            /* if (recordDescriptor[i].type == TypeVarChar) */
+            /* { */
+            /*     memcpy((char *)data + data_offset, start + rec_offset, VARCHAR_LENGTH_SIZE); */
+            /*     data_offset += VARCHAR_LENGTH_SIZE; */
+            /*     rec_offset += VARCHAR_LENGTH_SIZE; */
+            /* } */
             // Next we copy bytes equal to the size of the field and increase our offsets
+            cerr << "readAttribute: We are reading from offset: " << start+rec_offset << ", " << fieldSize << " number of bytes." << endl;
             memcpy((char *)data + data_offset, start + rec_offset, fieldSize);
             break;
         }
