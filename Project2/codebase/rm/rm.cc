@@ -267,6 +267,7 @@ RC RelationManager::deleteTable(const string &tableName)
         free(data);
         return 10;
     }
+    cerr << "-----------------------------------------------" << endl << "deleted tables entry" << endl << "table id is "  << tableID << "-----------------" << endl;
     // Access the Columns file
     FileHandle columnFileHandle;
     rc = catalog->openFile("Columns", columnFileHandle);
@@ -304,8 +305,10 @@ RC RelationManager::deleteTable(const string &tableName)
     }
     columnsScanIterator.close();
     catalog->closeFile(columnFileHandle);
+    cerr << "-------------" << endl << "closed column file" << endl << "--------------------" << endl;
     //loop through all stored RIDs in the Columns table that need to be deleted and delete them
     for (unsigned i = 0; i < column_rids_to_delete.size(); i += 1){
+        cerr << "deleting rid" << column_rids_to_delete[i].pageNum << endl << column_rids_to_delete[i].slotNum << endl;
         rc = deleteTuple("Columns", column_rids_to_delete[i]);
         if (rc != SUCCESS) {
             free(data);
@@ -313,7 +316,7 @@ RC RelationManager::deleteTable(const string &tableName)
         }
     }
     free(data);
-    return 0;
+    
     // delete the actual table itself (no tuples need to be deleted since we're just destroying the file itself)
     rc = catalog->destroyFile(tableName);
     if (rc != SUCCESS) {
@@ -362,6 +365,7 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
     bool found = false;
     while (tablesScanIterator.getNextRecord(rid, data) != RBFM_EOF)
     {
+        cerr << "we got into the get next record of get attributes" << endl;
         /* rbfm->readRecord(tableFileHandle, tablesAttributesToRead, ) */
         int offset = int(ceil((double)tablesAttributesToRead.size() / CHAR_BIT)); // Have to account for empty nullIndicator
         memcpy(&tableID, (char *)data + offset, sizeof(int));              // Grabs tableID
@@ -601,15 +605,19 @@ RC RelationManager::scan(const string &tableName,
         return CATALOG_DSN_EXIST;
     }
 
-    RC rc = catalog->openFile(tableName, rm_ScanIterator.rm_scan_handle);
-    if (rc != SUCCESS) {
-        return rc;
-    }
+    // RC rc = catalog->openFile(tableName, rm_ScanIterator.rm_scan_handle);
+    // if (rc != SUCCESS) {
+    //     return rc;
+    // }
   
     vector<Attribute> recordDescriptor;
-    rc = getAttributes(tableName, recordDescriptor);
+    RC rc = getAttributes(tableName, recordDescriptor);
     if (rc != SUCCESS) {
         catalog->closeFile(rm_ScanIterator.rm_scan_handle);
+        return rc;
+    }
+    rc = catalog->openFile(tableName, rm_ScanIterator.rm_scan_handle);
+    if (rc != SUCCESS) {
         return rc;
     }
     rc = rm_ScanIterator.scan(rm_ScanIterator.rm_scan_handle, recordDescriptor, conditionAttribute, compOp, value, attributeNames);

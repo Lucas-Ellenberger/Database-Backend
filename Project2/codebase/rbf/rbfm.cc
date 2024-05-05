@@ -58,8 +58,8 @@ RC RecordBasedFileManager::closeFile(FileHandle &fileHandle)
 RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const void *data, RID &rid)
 {
     // Gets the size of the record.
-    cerr << "insertRecord: Received the following data." << endl;
-    printRecord(recordDescriptor, data);
+    // cerr << "insertRecord: Received the following data." << endl;
+    // printRecord(recordDescriptor, data);
     unsigned recordSize = getRecordSize(recordDescriptor, data);
     // Cycles through pages looking for enough free space for the new entry.
     void *pageData = malloc(PAGE_SIZE);
@@ -123,12 +123,12 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
             return RBFM_APPEND_FAILED;
     }
 
-    cerr << "insertRecord: returned rid, pageNum: " << rid.pageNum << " slotNum: " << rid.slotNum << endl;
+    // cerr << "insertRecord: returned rid, pageNum: " << rid.pageNum << " slotNum: " << rid.slotNum << endl;
 
-    void* temp = malloc(PAGE_SIZE);
-    readRecord(fileHandle, recordDescriptor, rid, temp);
-    printRecord(recordDescriptor, temp);
-    free(temp);
+    // void* temp = malloc(PAGE_SIZE);
+    // readRecord(fileHandle, recordDescriptor, rid, temp);
+    // printRecord(recordDescriptor, temp);
+    // free(temp);
     free(pageData);
     return SUCCESS;
 }
@@ -301,7 +301,7 @@ RC RecordBasedFileManager::deleteRecord(FileHandle &fileHandle, const vector<Att
 }
 RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const void *data, const RID &rid)
 {
-    cerr << "updateRecord: starting rid.pageNum: " << rid.pageNum << " rid.slotNum: " << rid.slotNum << endl;
+    // cerr << "updateRecord: starting rid.pageNum: " << rid.pageNum << " rid.slotNum: " << rid.slotNum << endl;
     /* cerr << "updateRecord: We are trying to write in:" << endl; */
     /* printRecord(recordDescriptor, data); */
     // Retrieve the specified page
@@ -358,7 +358,7 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
             return RBFM_READ_FAILED;
         }
         setSlotDirectoryRecordEntry(pageData, rid.slotNum, oldEntry);
-        cerr << "updateRecord: after delete: rid.pageNum: " << rid.pageNum << " rid.slotNum: " << rid.slotNum << endl;
+        // cerr << "updateRecord: after delete: rid.pageNum: " << rid.pageNum << " rid.slotNum: " << rid.slotNum << endl;
         if (fileHandle.writePage(rid.pageNum, pageData))
         {
             free(pageData);
@@ -376,17 +376,17 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
         }
         // Preps RecordEntry to be inserted in directory
         SlotDirectoryRecordEntry newEntry;
-        cerr << "bitmask: " << bitmask << endl;
-        cerr << "updateRecord: after insert: forwardingRid.pageNum: " << forwardingRid.pageNum << endl;
+        // cerr << "bitmask: " << bitmask << endl;
+        // cerr << "updateRecord: after insert: forwardingRid.pageNum: " << forwardingRid.pageNum << endl;
         newEntry.offset = forwardingRid.pageNum | bitmask;
         newEntry.length = forwardingRid.slotNum;      // Sets slot num of forwarded address
-        cerr << "updateRecord: after insert: newEntry.offset: " << newEntry.offset << endl;
+        // cerr << "updateRecord: after insert: newEntry.offset: " << newEntry.offset << endl;
         /* newEntry.offset = forwardingRid.pageNum * -1; // Multiply by -1 to set forwarding flag */
         /* newEntry.length = forwardingRid.slotNum;      // Sets slot num of forwarded address */
         // Update Slot Directory
         setSlotDirectoryRecordEntry(pageData, rid.slotNum, newEntry); // Accesses old rid for slot number
-        cerr << "updateRecord: after insert: rid.pageNum: " << rid.pageNum << " rid.slotNum: " << rid.slotNum << endl;
-        cerr << "updateRecord: after insert: forwardingRid.pageNum: " << forwardingRid.pageNum << " forwardingRid.slotNum: " << forwardingRid.slotNum << endl;
+        // cerr << "updateRecord: after insert: rid.pageNum: " << rid.pageNum << " rid.slotNum: " << rid.slotNum << endl;
+        // cerr << "updateRecord: after insert: forwardingRid.pageNum: " << forwardingRid.pageNum << " forwardingRid.slotNum: " << forwardingRid.slotNum << endl;
         // Write back the page data
         if (fileHandle.writePage(rid.pageNum, pageData))
         {
@@ -458,11 +458,11 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
 }
 RC RecordBasedFileManager::readAttribute(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const RID &rid, const string &attributeName, void *data)
 {
-    cerr << "they gave an rid, pagnum: " << rid.pageNum << " slotnum: " << rid.slotNum << endl;
-    void* my_temp = malloc(PAGE_SIZE);
-    readRecord(fileHandle, recordDescriptor, rid, my_temp);
-    cerr << "printing record at start of read attr" << endl;
-    printRecord(recordDescriptor, my_temp);
+    // cerr << "they gave an rid, pagnum: " << rid.pageNum << " slotnum: " << rid.slotNum << endl;
+    // void* my_temp = malloc(PAGE_SIZE);
+    // readRecord(fileHandle, recordDescriptor, rid, my_temp);
+    // cerr << "printing record at start of read attr" << endl;
+    // printRecord(recordDescriptor, my_temp);
     // Retrieve the specified page
     void *pageData = malloc(PAGE_SIZE);
     if (pageData == NULL)
@@ -516,11 +516,11 @@ RC RecordBasedFileManager::readAttribute(FileHandle &fileHandle, const vector<At
     unsigned data_offset = sizeof(char);
     // directory_base: points to the start of our directory of indices
     char *directory_base = start + sizeof(RecordLength) + recordNullIndicatorSize;
-    void *temp = malloc(PAGE_SIZE);
-    cerr << "rid we give to readRecord: pagnum: " << rid.pageNum << " slotnum: " << rid.slotNum << endl;
-    if (readRecord(fileHandle, recordDescriptor, rid, temp))
-        cerr << "read failed." << endl;
-    printRecord(recordDescriptor, temp);
+    // void *temp = malloc(PAGE_SIZE);
+    // cerr << "rid we give to readRecord: pagnum: " << rid.pageNum << " slotnum: " << rid.slotNum << endl;
+    // if (readRecord(fileHandle, recordDescriptor, rid, temp))
+    //     cerr << "read failed." << endl;
+    // printRecord(recordDescriptor, temp);
     unsigned i = 0;
     for (i = 0; i < recordDescriptor.size(); i++)
     {
