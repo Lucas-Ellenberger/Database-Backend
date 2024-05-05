@@ -30,8 +30,8 @@ using namespace std;
 // Record ID
 typedef struct
 {
-  unsigned pageNum; // page number
-  unsigned slotNum; // slot number in the page
+  int32_t pageNum; // page number
+  int32_t slotNum; // slot number in the page
 } RID;
 
 // Attribute

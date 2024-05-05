@@ -4,8 +4,8 @@
 #include <iostream>
 #include <cmath>
 
-#define table "Tables"
-#define column "Columns"
+// #define table "Tables"
+// #define column "Columns"
 
 RelationManager *RelationManager::_rm = 0;
 RelationManager *RelationManager::instance()
@@ -257,7 +257,7 @@ RC RelationManager::deleteTable(const string &tableName)
 
     // Check if table file exists
     FileHandle tableFileHandle;
-    RC rc = catalog->openFile(table, tableFileHandle);
+    RC rc = catalog->openFile("Tables", tableFileHandle);
     if (rc != SUCCESS)
     {
         return rc;
@@ -347,6 +347,7 @@ RC RelationManager::deleteTable(const string &tableName)
         RID rid_temp;
         rid_temp.pageNum = rid.pageNum;
         rid_temp.slotNum = rid.slotNum;
+        cerr << "rid.pageNum: " << rid.pageNum << " rid.slotNum: " << rid.slotNum << endl;
         column_rids_to_delete.push_back(rid_temp);
         //no values inside the tuples should matter, i just need to delete them, lets create a vector of RIDs
     }
@@ -387,7 +388,7 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
 
     // Check if table file exists
     FileHandle tableFileHandle;
-    RC rc = catalog->openFile(table, tableFileHandle);
+    RC rc = catalog->openFile("Tables", tableFileHandle);
     if (rc != SUCCESS)
     {
         cerr << "getAttributes: open file failure." << endl;
@@ -518,7 +519,7 @@ RC RelationManager::insertTuple(const string &tableName, const void *data, RID &
     }
 
     FileHandle tableFileHandle;
-    RC rc = catalog->openFile(tableName, tableFileHandle);
+    RC rc = catalog->openFile("Tables", tableFileHandle);
     if (rc != SUCCESS)
     {
         return rc; // Failed to open the file
@@ -546,7 +547,7 @@ RC RelationManager::deleteTuple(const string &tableName, const RID &rid)
 
     // Open file corresponding to the table name
     FileHandle tableFileHandle;
-    RC rc = catalog->openFile(tableName, tableFileHandle);
+    RC rc = catalog->openFile("Tables", tableFileHandle);
     if (rc != SUCCESS)
     {
         return rc;
@@ -609,12 +610,14 @@ RC RelationManager::readTuple(const string &tableName, const RID &rid, void *dat
 
     vector<Attribute> recordDescriptor;
     rc = getAttributes(tableName, recordDescriptor);
+    /* cerr << "readTuple: found " << recordDescriptor.size() << " descriptors." << endl; */
     if (rc != SUCCESS) {
         catalog->closeFile(handle);
         return rc; 
     }
 
     rc = catalog->readRecord(handle, recordDescriptor, rid, data);
+    /* cerr << "readTuple: readRecord returned." << endl; */
     if (rc != SUCCESS) {
         catalog->closeFile(handle);
         return rc; 
@@ -644,11 +647,12 @@ RC RelationManager::readAttribute(const string &tableName, const RID &rid, const
 
     // Check if table file exists
     FileHandle handle;
-    RC rc = catalog->openFile(table, handle);
+    RC rc = catalog->openFile(tableName, handle);
     if (rc != SUCCESS)
     {
         return rc;
     }
+
 
     vector<Attribute> recordDescriptor;
     rc = getAttributes(tableName, recordDescriptor);
@@ -656,6 +660,19 @@ RC RelationManager::readAttribute(const string &tableName, const RID &rid, const
         catalog->closeFile(handle);
         return rc;
     }
+    
+    /* cerr << "printing out record descriptor" << endl; */
+    /* cerr << "sizeof record descriptor" << recordDescriptor.size() << endl; */
+    /* for (int i = 0; i < recordDescriptor.size(); i += 1) { */
+    /*     cerr << "name: " << recordDescriptor[i].name << endl; */
+    /*     cerr << "type: " << recordDescriptor[i].type << endl; */
+    /*     cerr << "length: " << recordDescriptor[i].length << endl; */
+    /* } */
+
+    /* cerr << "printing from RM read attr" << endl; */
+    /* void* temp = malloc(PAGE_SIZE); */
+    /* catalog->readRecord(handle, recordDescriptor, rid, temp); */
+    /* catalog->printRecord(recordDescriptor, temp); */
 
     rc = catalog->readAttribute(handle, recordDescriptor, rid, attributeName, data);
     if (rc != SUCCESS) {
@@ -678,7 +695,7 @@ RC RelationManager::scan(const string &tableName,
         return CATALOG_DSN_EXIST;
     }
 
-    RC rc = catalog->openFile(table, rm_ScanIterator.rm_scan_handle);
+    RC rc = catalog->openFile(tableName, rm_ScanIterator.rm_scan_handle);
     if (rc != SUCCESS) {
         return rc;
     }

@@ -5,7 +5,12 @@
 #include <string.h>
 #include <iomanip>
 
+// everthing is an int32_t
+// setting
+int32_t bitmask = 0x80000000;
 
+// retreiving
+int32_t retreivemask = 0x7fffffff;
 
 RecordBasedFileManager *RecordBasedFileManager::_rbf_manager = NULL;
 PagedFileManager *RecordBasedFileManager::_pf_manager = NULL;
@@ -69,7 +74,10 @@ RC RecordBasedFileManager::closeFile(FileHandle &fileHandle)
 RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const void *data, RID &rid)
 {
     // Gets the size of the record.
+    /* cerr << "insertRecord: Received the following data." << endl; */
+    /* printRecord(recordDescriptor, data); */
     unsigned recordSize = getRecordSize(recordDescriptor, data);
+    /* cerr << "insertRecord: found the record length: " << recordSize << endl; */
 
     // Cycles through pages looking for enough free space for the new entry.
     void *pageData = malloc(PAGE_SIZE);
@@ -121,11 +129,13 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
     // Adding the new record reference in the slot directory.
     newRecordEntry.length = recordSize;
     newRecordEntry.offset = slotHeader.freeSpaceOffset - recordSize;
+    /* cerr << "insertRecord: inserting an offset: " << newRecordEntry.offset << endl; */
     setSlotDirectoryRecordEntry(pageData, rid.slotNum, newRecordEntry);
 
     // Updating the slot directory header.
     slotHeader.freeSpaceOffset = newRecordEntry.offset;
-    slotHeader.recordEntriesNumber += 1;
+    if (!foundSlot)
+        slotHeader.recordEntriesNumber += 1;
     setSlotDirectoryHeader(pageData, slotHeader);
 
     // Adding the record data.
@@ -143,6 +153,11 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
             return RBFM_APPEND_FAILED;
     }
 
+    /* cerr << "insertRecord: returned rid, pageNum: " << rid.pageNum << " slotNum: " << rid.slotNum << endl; */
+    /* void* temp = malloc(PAGE_SIZE); */
+    /* readRecord(fileHandle, recordDescriptor, rid, temp); */
+    /* printRecord(recordDescriptor, temp); */
+    /* free(temp); */
     free(pageData);
     return SUCCESS;
 }
@@ -174,7 +189,8 @@ RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const vector<Attri
     {
         // This is a forwarding address.
         RID newRID;
-        newRID.pageNum = (recordEntry.offset * -1);
+        newRID.pageNum = recordEntry.offset & retreivemask;
+        /* newRID.pageNum = (recordEntry.offset * -1); */
         newRID.slotNum = recordEntry.length;
         free(pageData);
         return readRecord(fileHandle, recordDescriptor, newRID, data);
@@ -230,6 +246,8 @@ RC RecordBasedFileManager::printRecord(const vector<Attribute> &recordDescriptor
             uint32_t varcharSize;
             memcpy(&varcharSize, ((char *)data + offset), VARCHAR_LENGTH_SIZE);
             offset += VARCHAR_LENGTH_SIZE;
+            /* if (varcharSize > 10) */
+            /*     cerr << "printRecord: found a varchar of length: " << varcharSize << endl; */
 
             // Gets the actual string.
             char *data_string = (char *)malloc(varcharSize + 1);
@@ -285,7 +303,8 @@ RC RecordBasedFileManager::deleteRecord(FileHandle &fileHandle, const vector<Att
     {
         // This is a forwarding address.
         RID newRID;
-        newRID.pageNum = (recordEntry.offset * -1); // we need to be very careful about how we are defining the record offset.
+        newRID.pageNum = recordEntry.offset & retreivemask;
+        /* newRID.pageNum = (recordEntry.offset * -1); // we need to be very careful about how we are defining the record offset. */
                                                     // If it is negative, we can either just set the final bit to 1, or we can multiply by -1.
                                                     // these are likely not equivalent b/c Two's complement. So like... pick one
         newRID.slotNum = recordEntry.length;        // we shouldnt need to screw with the length, we just need to make sure that the MSB is only used
@@ -345,6 +364,9 @@ RC RecordBasedFileManager::deleteRecord(FileHandle &fileHandle, const vector<Att
 
 RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const void *data, const RID &rid)
 {
+    /* cerr << "updateRecord: starting rid.pageNum: " << rid.pageNum << " rid.slotNum: " << rid.slotNum << endl; */
+    /* cerr << "updateRecord: We are trying to write in:" << endl; */
+    /* printRecord(recordDescriptor, data); */
     // Retrieve the specified page
     void *pageData = malloc(PAGE_SIZE);
     if (pageData == NULL)
@@ -387,13 +409,34 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
     {
         // Creates RID to be passed in deleteRecord
         RID forwardingRid;
-        forwardingRid.pageNum = oldEntry.offset * -1;
+        forwardingRid.pageNum = oldEntry.offset & retreivemask;
         forwardingRid.slotNum = oldEntry.length;
+        // retreiving
+        /* void *temp = malloc(PAGE_SIZE); */
+        /* readRecord(fileHandle, recordDescriptor, forwardingRid, temp); */
+        /* cerr << "updateRecord: record data before update from forwarded address." << endl; */
+        /* printRecord(recordDescriptor, temp); */
+        /* free(temp); */
 
         if (deleteRecord(fileHandle, recordDescriptor, forwardingRid))
         {
             free(pageData);
             return RBFM_DELETE_FAILED;
+        }
+
+        if (fileHandle.readPage(rid.pageNum, pageData))
+        {
+            free(pageData);
+            return RBFM_READ_FAILED;
+        }
+
+        setSlotDirectoryRecordEntry(pageData, rid.slotNum, oldEntry);
+        /* cerr << "updateRecord: after delete: rid.pageNum: " << rid.pageNum << " rid.slotNum: " << rid.slotNum << endl; */
+
+        if (fileHandle.writePage(rid.pageNum, pageData))
+        {
+            free(pageData);
+            return RBFM_WRITE_FAILED;
         }
 
         if (insertRecord(fileHandle, recordDescriptor, data, forwardingRid)) // After inserting, forwardingRid is updated with new rid
@@ -402,13 +445,26 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
             return RBFM_INSERT_FAILED;
         }
 
+        if (fileHandle.readPage(rid.pageNum, pageData))
+        {
+            free(pageData);
+            return RBFM_READ_FAILED;
+        }
+
         // Preps RecordEntry to be inserted in directory
         SlotDirectoryRecordEntry newEntry;
-        newEntry.offset = forwardingRid.pageNum * -1; // Multiply by -1 to set forwarding flag
+        /* cerr << "bitmask: " << bitmask << endl; */
+        /* cerr << "updateRecord: after insert: forwardingRid.pageNum: " << forwardingRid.pageNum << endl; */
+        newEntry.offset = forwardingRid.pageNum | bitmask;
         newEntry.length = forwardingRid.slotNum;      // Sets slot num of forwarded address
+        /* cerr << "updateRecord: after insert: newEntry.offset: " << newEntry.offset << endl; */
+        /* newEntry.offset = forwardingRid.pageNum * -1; // Multiply by -1 to set forwarding flag */
+        /* newEntry.length = forwardingRid.slotNum;      // Sets slot num of forwarded address */
 
         // Update Slot Directory
         setSlotDirectoryRecordEntry(pageData, rid.slotNum, newEntry); // Accesses old rid for slot number
+        /* cerr << "updateRecord: after insert: rid.pageNum: " << rid.pageNum << " rid.slotNum: " << rid.slotNum << endl; */
+        /* cerr << "updateRecord: after insert: forwardingRid.pageNum: " << forwardingRid.pageNum << " forwardingRid.slotNum: " << forwardingRid.slotNum << endl; */
 
         // Write back the page data
         if (fileHandle.writePage(rid.pageNum, pageData))
@@ -420,6 +476,11 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
         free(pageData);
         return SUCCESS;
     }
+    /* cerr << "updateRecord: record data before the update:" << endl; */
+    /* void *temp = malloc(PAGE_SIZE); */
+    /* readRecord(fileHandle, recordDescriptor, rid, temp); */
+    /* printRecord(recordDescriptor, temp); */
+    /* free(temp); */
 
     // Case when record is present on the page
     if (deleteRecord(fileHandle, recordDescriptor, rid))
@@ -427,23 +488,60 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
         free(pageData);
         return RBFM_DELETE_FAILED;
     }
+    
+    if (fileHandle.readPage(rid.pageNum, pageData))
+    {
+        free(pageData);
+        return RBFM_READ_FAILED;
+    }
+    /* cerr << "updateRecord: after delete: rid.pageNum: " << rid.pageNum << " rid.slotNum: " << rid.slotNum << endl; */
+
+    setSlotDirectoryRecordEntry(pageData, rid.slotNum, oldEntry);
+
+    if (fileHandle.writePage(rid.pageNum, pageData))
+    {
+        free(pageData);
+        return RBFM_WRITE_FAILED;
+    }
 
     // Creates RID to be passed in insertRecord
     RID forwardingRid;
 
-    if (insertRecord(fileHandle, recordDescriptor, pageData, forwardingRid)) // After inserting, new Rid is stored in forwardingRid
+    if (insertRecord(fileHandle, recordDescriptor, data, forwardingRid)) // After inserting, new Rid is stored in forwardingRid
     {
         free(pageData);
         return RBFM_INSERT_FAILED;
     }
 
+    if (fileHandle.readPage(rid.pageNum, pageData))
+    {
+        free(pageData);
+        return RBFM_READ_FAILED;
+    }
+
     // Preps RecordEntry to be inserted in directory
     SlotDirectoryRecordEntry newEntry;
-    newEntry.offset = forwardingRid.pageNum * -1; // Multiply by -1 to set forwarding flag
+    /* unsigned bitmask = 1; */
+    /* bitmask << (sizeof(newEntry.offset) * CHAR_BIT) - 1; */
+    /* cerr << "bitmask: " << bitmask << endl; */
+    /* cerr << "updateRecord: after insert: forwardingRid.pageNum: " << forwardingRid.pageNum << endl; */
+    newEntry.offset = forwardingRid.pageNum | bitmask;
     newEntry.length = forwardingRid.slotNum;      // Sets slot num of forwarded address
+    /* cerr << "updateRecord: after insert: newEntry.offset: " << newEntry.offset << endl; */
 
     // Update RecordEntry to have forwarding address
     setSlotDirectoryRecordEntry(pageData, rid.slotNum, newEntry); // Accesses old rid for slot number
+
+    if (fileHandle.writePage(rid.pageNum, pageData))
+    {
+        free(pageData);
+        return RBFM_WRITE_FAILED;
+    }
+    /* cerr << "updateRecord: record data after the update:" << endl; */
+    /* temp = malloc(PAGE_SIZE); */
+    /* readRecord(fileHandle, recordDescriptor, forwardingRid, temp); */
+    /* printRecord(recordDescriptor, temp); */
+    /* free(temp); */
 
     free(pageData);
     return SUCCESS;
@@ -451,6 +549,11 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
 
 RC RecordBasedFileManager::readAttribute(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const RID &rid, const string &attributeName, void *data)
 {
+    /* cerr << "they gave an rid, pagnum: " << rid.pageNum << " slotnum: " << rid.slotNum << endl; */
+    /* void* my_temp = malloc(PAGE_SIZE); */
+    /* readRecord(fileHandle, recordDescriptor, rid, my_temp); */
+    /* cerr << "printing record at start of read attr" << endl; */
+    /* printRecord(recordDescriptor, my_temp); */
     // Retrieve the specified page
     void *pageData = malloc(PAGE_SIZE);
     if (pageData == NULL)
@@ -474,11 +577,14 @@ RC RecordBasedFileManager::readAttribute(FileHandle &fileHandle, const vector<At
     if (recordEntry.offset < 0)
     {
         RID forwardingRid;
-        forwardingRid.pageNum = recordEntry.offset * -1;
+        /* forwardingRid.pageNum = recordEntry.offset * -1; */
+        forwardingRid.pageNum = recordEntry.offset & retreivemask;
         forwardingRid.slotNum = recordEntry.length;
         free(pageData);
         return readAttribute(fileHandle, recordDescriptor, forwardingRid, attributeName, data);
     }
+    /* cerr << "readAttribute: found the record length: " << recordEntry.length << endl; */
+    /* cerr << "readAttribute: found the record offset: " << recordEntry.offset << endl; */
 
     // Points to start of record
     char *start = (char *)pageData + recordEntry.offset;
@@ -494,7 +600,7 @@ RC RecordBasedFileManager::readAttribute(FileHandle &fileHandle, const vector<At
     int recordNullIndicatorSize = getNullIndicatorSize(len);
 
     // Read in the existing null indicator
-    memcpy(nullIndicator, (char *)pageData, nullIndicatorSize);
+    memcpy(nullIndicator, start + sizeof(RecordLength), nullIndicatorSize);
 
     // If this new recordDescriptor has had fields added to it, we set all of the new fields to null
     for (unsigned i = len; i < recordDescriptor.size(); i++)
@@ -511,18 +617,28 @@ RC RecordBasedFileManager::readAttribute(FileHandle &fileHandle, const vector<At
     // rec_offset: points to data in the record. We move this forward as we read data from our record
     unsigned rec_offset = sizeof(RecordLength) + recordNullIndicatorSize + len * sizeof(ColumnOffset);
     // data_offset: points to our current place in the output data. We move this forward as we write to data.
-    unsigned data_offset = nullIndicatorSize;
+    unsigned data_offset = sizeof(char);
     // directory_base: points to the start of our directory of indices
     char *directory_base = start + sizeof(RecordLength) + recordNullIndicatorSize;
+    void *temp = malloc(PAGE_SIZE);
+    /* cerr << "rid we give to readRecord: pagnum: " << rid.pageNum << " slotnum: " << rid.slotNum << endl; */
+    if (readRecord(fileHandle, recordDescriptor, rid, temp))
+        cerr << "read failed." << endl;
+    printRecord(recordDescriptor, temp);
 
     unsigned i = 0;
     for (i = 0; i < recordDescriptor.size(); i++)
     {
         if (recordDescriptor[i].name == attributeName)
         {
-            // TODO: Write out a null bit indicator only!
-            if (fieldIsNull(nullIndicator, i))
-                break;
+            /* cerr << "We found the attribue." << endl; */
+            if (fieldIsNull(nullIndicator, i)) {
+                /* cerr << "The attribue is null." << endl; */
+                char val = 0x80;
+                memcpy(data, &val, 1);
+                free(pageData);
+                return SUCCESS;
+            }
 
             ColumnOffset endPointer;
             memcpy(&endPointer, directory_base + i * sizeof(ColumnOffset), sizeof(ColumnOffset));
@@ -534,12 +650,14 @@ RC RecordBasedFileManager::readAttribute(FileHandle &fileHandle, const vector<At
             uint32_t fieldSize = endPointer - rec_offset;
 
             // Special case for varchar, we must give data the size of varchar first
-            if (recordDescriptor[i].type == TypeVarChar)
-            {
-                memcpy((char *)data + data_offset, &fieldSize, VARCHAR_LENGTH_SIZE);
-                data_offset += VARCHAR_LENGTH_SIZE;
-            }
+            /* if (recordDescriptor[i].type == TypeVarChar) */
+            /* { */
+            /*     memcpy((char *)data + data_offset, start + rec_offset, VARCHAR_LENGTH_SIZE); */
+            /*     data_offset += VARCHAR_LENGTH_SIZE; */
+            /*     rec_offset += VARCHAR_LENGTH_SIZE; */
+            /* } */
             // Next we copy bytes equal to the size of the field and increase our offsets
+            /* cerr << "readAttribute: We are reading from offset: " << start+rec_offset << ", " << fieldSize << " number of bytes." << endl; */
             memcpy((char *)data + data_offset, start + rec_offset, fieldSize);
             break;
         }
@@ -1025,8 +1143,8 @@ RC RBFM_ScanIterator::my_format_record(const vector<Attribute> &recordDescriptor
             bool isNull = rbfm->fieldIsNull(nullIndicator, i);
             // if the current attribute is NULL, just push the null bit and then continue to next attribute
             if (isNull) {
-                uint8_t bitmask = 1 << (7 - (null_indictor_index % 8));
-                returnNullIndicator[null_indictor_index / 8] = returnNullIndicator[null_indictor_index / 8] | bitmask;
+                uint8_t their_bitmask = 1 << (7 - (null_indictor_index % 8));
+                returnNullIndicator[null_indictor_index / 8] = returnNullIndicator[null_indictor_index / 8] | their_bitmask;
                 continue;
             }
           
@@ -1079,6 +1197,7 @@ RC RBFM_ScanIterator::my_format_record(const vector<Attribute> &recordDescriptor
                 unsigned varcharSize;
                 memcpy(&varcharSize, ((char *)data + offset), VARCHAR_LENGTH_SIZE);
                 memcpy(((char *)return_data + ret_offset), ((char *)data + offset), VARCHAR_LENGTH_SIZE);
+                /* cerr << "my_format_record: Found a var char size of: " << varcharSize << endl; */
                 offset += VARCHAR_LENGTH_SIZE;
                 ret_offset += VARCHAR_LENGTH_SIZE;
                 
@@ -1122,6 +1241,7 @@ RC RBFM_ScanIterator::my_format_record(const vector<Attribute> &recordDescriptor
                     }
                     unsigned varcharSize;
                     memcpy(&varcharSize, ((char *)data + offset), VARCHAR_LENGTH_SIZE);
+                    /* cerr << "my_format_record: Found a var char size of: " << varcharSize << endl; */
                     offset += (varcharSize + VARCHAR_LENGTH_SIZE);
                     break;
             }
@@ -1215,7 +1335,7 @@ bool RBFM_ScanIterator::acceptRecord(unsigned offset)
                 memcpy(&varcharSize, ((char *)pageData + data_offset), VARCHAR_LENGTH_SIZE);
                 data_offset += VARCHAR_LENGTH_SIZE;
                 // Gets the actual string.
-                cerr << "acceptRecord: found a varchar of size: " << varcharSize << endl;
+                /* cerr << "acceptRecord: found a varchar of size: " << varcharSize << endl; */
                 char *data_string = (char *)malloc(varcharSize + 1);
                 if (data_string == NULL) {
                     cerr << "acceptRecord: Unable to malloc data_string." << endl;
