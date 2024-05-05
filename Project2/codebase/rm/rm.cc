@@ -26,14 +26,15 @@ RC RelationManager::createCatalog()
     // we do not have fixed length so we cannot store length.
     // we do not have any indexes so we will not store any information about indexes, same goes for constraints.
     RC rc;
-    rc = catalog->createFile("Tables");
+    string MY_TABLE = "Tables";
+    rc = catalog->createFile(MY_TABLE);
     if (rc != SUCCESS)
     {
         cerr << "Unable to create Tables file" << endl;
         return rc;
     }
   
-    rc = catalog->openFile("Tables", tableHandle);
+    rc = catalog->openFile(MY_TABLE, tableHandle);
     if (rc != SUCCESS)
     {
         cerr << "Unable to open Tables file" << endl;
@@ -51,6 +52,7 @@ RC RelationManager::createCatalog()
     int recordSize = 0;
     void *record = malloc(200);
     void *returnedData = malloc(100);
+    
     prepareTableRecord(tableDescriptor.size(), nullsIndicatorTable, 1, 6, "Tables", 6, "Tables", record, &recordSize); // not sure we actually need recordSize
     rc = catalog->insertRecord(tableHandle, tableDescriptor, record, rid);
     if (rc != SUCCESS)
@@ -136,7 +138,8 @@ RC RelationManager::deleteCatalog()
 RC RelationManager::createTable(const string &tableName, const vector<Attribute> &attrs)
 {
     // have to check if table exists already, only way I see is by going through the catalog to see if there is already a table of the same name (idk how to do that yet)
-    RC rc = catalog->openFile("Tables", tableHandle);
+    string MY_TABLE = "Tables";
+    RC rc = catalog->openFile(MY_TABLE, tableHandle);
     if (rc != SUCCESS)
     {
         cerr << "Unable to open Tables file" << endl;
@@ -219,7 +222,8 @@ RC RelationManager::deleteTable(const string &tableName)
 
     // Check if table file exists
     FileHandle tableFileHandle;
-    RC rc = catalog->openFile("Tables", tableFileHandle);
+    string MY_TABLE = "Tables";
+    RC rc = catalog->openFile(MY_TABLE, tableFileHandle);
     if (rc != SUCCESS)
     {
         return rc;
@@ -262,7 +266,7 @@ RC RelationManager::deleteTable(const string &tableName)
     }
     //now we have the RID for the tuple for this table in the Tables table, and we need to use the table-id to delete everything out of the columns table
     // use the RID to delete the tuple out of the Tables table
-    rc = deleteTuple("Tables", rid);
+    rc = deleteTuple(MY_TABLE, rid);
     if (rc != SUCCESS) {
         free(data);
         return 10;
