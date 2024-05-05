@@ -257,7 +257,7 @@ RC RelationManager::deleteTable(const string &tableName)
 
     // Check if table file exists
     FileHandle tableFileHandle;
-    RC rc = catalog->openFile(tableName, tableFileHandle);
+    RC rc = catalog->openFile("Tables", tableFileHandle);
     if (rc != SUCCESS)
     {
         return rc;
@@ -347,6 +347,7 @@ RC RelationManager::deleteTable(const string &tableName)
         RID rid_temp;
         rid_temp.pageNum = rid.pageNum;
         rid_temp.slotNum = rid.slotNum;
+        cerr << "rid.pageNum: " << rid.pageNum << " rid.slotNum: " << rid.slotNum << endl;
         column_rids_to_delete.push_back(rid_temp);
         //no values inside the tuples should matter, i just need to delete them, lets create a vector of RIDs
     }
@@ -518,7 +519,7 @@ RC RelationManager::insertTuple(const string &tableName, const void *data, RID &
     }
 
     FileHandle tableFileHandle;
-    RC rc = catalog->openFile(tableName, tableFileHandle);
+    RC rc = catalog->openFile("Tables", tableFileHandle);
     if (rc != SUCCESS)
     {
         return rc; // Failed to open the file
@@ -546,7 +547,7 @@ RC RelationManager::deleteTuple(const string &tableName, const RID &rid)
 
     // Open file corresponding to the table name
     FileHandle tableFileHandle;
-    RC rc = catalog->openFile(tableName, tableFileHandle);
+    RC rc = catalog->openFile("Tables", tableFileHandle);
     if (rc != SUCCESS)
     {
         return rc;
@@ -660,18 +661,18 @@ RC RelationManager::readAttribute(const string &tableName, const RID &rid, const
         return rc;
     }
     
-    cerr << "printing out record descriptor" << endl;
-    cerr << "sizeof record descriptor" << recordDescriptor.size() << endl;
-    for (int i = 0; i < recordDescriptor.size(); i += 1) {
-        cerr << "name: " << recordDescriptor[i].name << endl;
-        cerr << "type: " << recordDescriptor[i].type << endl;
-        cerr << "length: " << recordDescriptor[i].length << endl;
-    }
+    /* cerr << "printing out record descriptor" << endl; */
+    /* cerr << "sizeof record descriptor" << recordDescriptor.size() << endl; */
+    /* for (int i = 0; i < recordDescriptor.size(); i += 1) { */
+    /*     cerr << "name: " << recordDescriptor[i].name << endl; */
+    /*     cerr << "type: " << recordDescriptor[i].type << endl; */
+    /*     cerr << "length: " << recordDescriptor[i].length << endl; */
+    /* } */
 
-    cerr << "printing from RM read attr" << endl;
-    void* temp = malloc(PAGE_SIZE);
-    catalog->readRecord(handle, recordDescriptor, rid, temp);
-    catalog->printRecord(recordDescriptor, temp);
+    /* cerr << "printing from RM read attr" << endl; */
+    /* void* temp = malloc(PAGE_SIZE); */
+    /* catalog->readRecord(handle, recordDescriptor, rid, temp); */
+    /* catalog->printRecord(recordDescriptor, temp); */
 
     rc = catalog->readAttribute(handle, recordDescriptor, rid, attributeName, data);
     if (rc != SUCCESS) {
