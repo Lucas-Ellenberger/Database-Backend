@@ -9,6 +9,54 @@ ID#s and Names for others on the Team
 2. Catalogs/Metadata
 
 - Show your catalog design (Tables and Columns tables), and the information about each column in those catalogs.
+
+Tables table:
+    The Tables table stores information about each table including its unique table ID, name, and the corresponding
+    file name where the table data is stored. The columns within this table is listed in the order of table-id (int),
+    table-name (VarChar), file-name (VarChar). The table-id is our unique identifier for tables, and is needed in order
+    to obtain the column attributes from the columns table. The table-name column is the name which was provided when
+    createTable() is called. When a user tries to do any tuple operations, table-name is the condition which we compare
+    in order to find the corresponding table. The file-name stores the name of the file which we use to access when making
+    modification to any records. In our implementation, we had chosen to have the file name always match the name of the
+    table which allows us to efficently obtain and open table files.
+
+    The Tables table follows the same format as shown in the Project description. It does not contain any additional attributes.
+
+    Tables
+    (1, "Tables", "Tables")
+    (2, "Columns", "Columns")
+    (3, "Employee", "Employee")
+
+Columns table:
+    The Columns table stores information regarding the tables in the Tables catalog. This includes the table ID to which
+    the column belongs, column name, column type, column type, and column position. These attributes are listed in the
+    order of, table-id (int), column-name (Varchar), column-type (int), column_length (int), and column-position (int).
+    Any operation on a table requires first obtaining the table-id from the Tables catalog and then scanning the columns
+    Table for the corresponding attributes. The column-name contains information on the name of the attribute. The column-type
+    has three different values, TypeInt, TypeReal, TypeVarChar, which allows the rm to manipulate the data accordingly.
+    For column-length, the value will be dependent on the column-type and lets us know how much space to allocate for
+    the attribute's data. Lastly column-position provides the postion of the attribute within that table.
+
+    Again, the Column table follows the same format as given in the Project description. It does not contian any addtional attributes.
+
+    Columns
+    (1, "table-id", TypeInt, 4 , 1)
+    (1, "table-name", TypeVarChar, 50, 2)
+    (1, "file-name", TypeVarChar, 50, 3)
+    (2, "table-id", TypeInt, 4, 1)
+    (2, "column-name", TypeVarChar, 50, 2)
+    (2, "column-type", TypeInt, 4, 3)
+    (2, "column-length", TypeInt, 4, 4)
+    (2, "column-position", TypeInt, 4, 5)
+    (3, "empname", TypeVarChar, 30, 1)
+    (3, "age", TypeInt, 4, 2)
+    (3, "height", TypeReal, 4, 3)
+    (3, "salary", TypeInt, 4, 4)
+
+
+    On initalization of a catalog class instance, the Tables and Columns table are created and contain Metadata about its own attributes.
+
+
 - How do you distinguish catalogs (which can't be changed by Insert, Update and Delete statements) from other tables?
 
 
