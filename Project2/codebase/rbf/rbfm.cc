@@ -151,7 +151,10 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
     }
 
     cerr << "insertRecord: returned rid, pageNum: " << rid.pageNum << " slotNum: " << rid.slotNum << endl;
-
+    void* temp = malloc(PAGE_SIZE);
+    readRecord(fileHandle, recordDescriptor, rid, temp);
+    printRecord(recordDescriptor, temp);
+    free(temp);
     free(pageData);
     return SUCCESS;
 }
@@ -544,6 +547,10 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
 RC RecordBasedFileManager::readAttribute(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const RID &rid, const string &attributeName, void *data)
 {
     cerr << "they gave an rid, pagnum: " << rid.pageNum << " slotnum: " << rid.slotNum << endl;
+    void* my_temp = malloc(PAGE_SIZE);
+    readRecord(fileHandle, recordDescriptor, rid, my_temp);
+    cerr << "printing record at start of read attr" << endl;
+    printRecord(recordDescriptor, my_temp);
     // Retrieve the specified page
     void *pageData = malloc(PAGE_SIZE);
     if (pageData == NULL)
