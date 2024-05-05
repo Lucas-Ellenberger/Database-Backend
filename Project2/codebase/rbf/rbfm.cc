@@ -815,6 +815,9 @@ void RBFM_ScanIterator::Open(FileHandle &fileHandle, const vector<Attribute> &re
     this->compOp = compOp;
     this->value = value;
     this->attributeNames = &attributeNames;
+    this->pageData = malloc(PAGE_SIZE);
+    if (pageData == NULL)
+        cerr << "Open: unable to malloc pageData." << endl;
 }
 
 // Never keep the results in the memory. When getNextRecord() is called,
@@ -822,8 +825,10 @@ void RBFM_ScanIterator::Open(FileHandle &fileHandle, const vector<Attribute> &re
 // "data" follows the same format as RecordBasedFileManager::insertRecord().
 RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data)
 {
+    /* cerr << "getNextRecord: We believe there are: " << totalPages << " totalPages." << endl; */
     while (this->pageNum < this->totalPages)
     {
+        /* cerr << "Trying to read page num: " << pageNum << endl; */
         if (this->recordNum == 0)
         {
             if (this->fileHandle->readPage(this->pageNum, this->pageData))
@@ -831,7 +836,7 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data)
 
             SlotDirectoryHeader header = rbfm->getSlotDirectoryHeader(this->pageData);
             this->totalRecordEntries = header.recordEntriesNumber;
-            this->recordNum = 0;
+            /* this->recordNum = 0; */
         }
 
         SlotDirectoryRecordEntry recordEntry;
@@ -856,9 +861,9 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data)
                 continue;
             }
 
-            char *start = (char *)this->pageData + recordEntry.offset;
+            memcpy(data, (char *)pageData + recordEntry.offset, recordEntry.length);
 
-            if (formatRecord((void *) start, *recordDescriptor, *attributeNames)) {
+            if (formatRecord(data, *recordDescriptor, *attributeNames)) {
                 cerr << "getNextRecord: Error formatting record. Skipping RID with pageNum: " << pageNum << ", recordNum: " << recordNum << endl;
                 this->recordNum++;
                 continue;
@@ -867,84 +872,17 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data)
             // We wrote in the data!
             rid.pageNum = pageNum;
             rid.slotNum = recordNum;
+            cerr << "We returned an RID with pageNum: " << pageNum << " and recordNum: " << recordNum << endl;
 
             // Prep starting record num for next call.
             this->recordNum++;
             return SUCCESS;
-
-
-            // Pointer to start of record
-            /* char *start = (char *)this->pageData + recordEntry.offset; */
-
-            /* // Allocate space for null indicator. */
-            /* int newNullIndicatorSize = rbfm->getNullIndicatorSize(this->attributeNames->size()); */
-            /* char newNullIndicator[newNullIndicatorSize]; */
-            /* memset(newNullIndicator, 0, newNullIndicatorSize); */
-
-            /* // Allocate space for null indicator. */
-            /* int nullIndicatorSize = rbfm->getNullIndicatorSize(this->recordDescriptor->size()); */
-            /* char nullIndicator[nullIndicatorSize]; */
-            /* memset(nullIndicator, 0, nullIndicatorSize); */
-
-            /* // Get number of columns and size of the null indicator for this record */
-            /* RecordLength len = 0; */
-            /* memcpy(&len, start, sizeof(RecordLength)); */
-            /* int recordNullIndicatorSize = rbfm->getNullIndicatorSize(len); */
-            /* // Read in the existing null indicator */
-            /* memcpy(nullIndicator, start + sizeof(RecordLength), recordNullIndicatorSize); */
-
-            /* // Initialize some offsets */
-            /* // rec_offset: points to data in the record. We move this forward as we read data from our record */
-            /* unsigned rec_offset = sizeof(RecordLength) + recordNullIndicatorSize + len * sizeof(ColumnOffset); */
-            /* // data_offset: points to our current place in the output data. We move this forward as we write to data. */
-            /* unsigned data_offset = nullIndicatorSize; */
-            /* // directory_base: points to the start of our directory of indices */
-            /* char *directory_base = start + sizeof(RecordLength) + recordNullIndicatorSize; */
-
-            /* unsigned newNullIndex = 0; */
-            /* for (unsigned i = 0; i < recordDescriptor->size(); i++) */
-            /* { */
-            /*     if (rbfm->fieldIsNull(nullIndicator, i)) */
-            /*     { */
-            /*         if (std::find(attributeNames.begin(), attributeNames.end(), )) */
-            /*         { */
-            /*         } */
-            /*         // TODO: Set NULL indicator. */
-            /*         newNullIndex++; */
-            /*         continue; */
-            /*     } */
-
-            /*     // Grab pointer to end of this column */
-            /*     ColumnOffset endPointer; */
-            /*     memcpy(&endPointer, directory_base + i * sizeof(ColumnOffset), sizeof(ColumnOffset)); */
-
-            /*     // rec_offset keeps track of start of column, so end-start = total size */
-            /*     uint32_t fieldSize = endPointer - rec_offset; */
-
-            /*     // Special case for varchar, we must give data the size of varchar first */
-            /*     if ((*recordDescriptor)[i].type == TypeVarChar) */
-            /*     { */
-            /*         memcpy((char *)data + data_offset, &fieldSize, VARCHAR_LENGTH_SIZE); */
-            /*         data_offset += VARCHAR_LENGTH_SIZE; */
-            /*     } */
-            /*     // Next we copy bytes equal to the size of the field and increase our offsets */
-            /*     memcpy((char *)data + data_offset, start + rec_offset, fieldSize); */
-            /*     rec_offset += fieldSize; */
-            /*     data_offset += fieldSize; */
-            /* } */
-
-            /* this->recordNum++; */
         }
 
         // Increment the page number and reset the record num.
         this->pageNum++;
         this->recordNum = 0;
     }
-
-    // TODO:
-    // If it does, construct data to have the reduced number of null indicators.
-    // Then, write in only the correct fields.
-    // Use read record and read attribute as guides.
 
     return RBFM_EOF;
 }
@@ -1018,13 +956,15 @@ bool RBFM_ScanIterator::acceptRecord(unsigned offset)
 
                 return floatCompare(&data_real);
             case TypeVarChar:
-                uint32_t varcharSize;
+                int varcharSize;
                 memcpy(&varcharSize, ((char *)pageData + data_offset), VARCHAR_LENGTH_SIZE);
                 data_offset += VARCHAR_LENGTH_SIZE;
                 // Gets the actual string.
+                cerr << "acceptRecord: found a varchar of size: " << varcharSize << endl;
                 char *data_string = (char *)malloc(varcharSize + 1);
                 if (data_string == NULL)
-                    return RBFM_MALLOC_FAILED;
+                    cerr << "acceptRecord: Unable to malloc data_string." << endl;
+                    return false;
 
                 memcpy(data_string, ((char *)pageData + data_offset), varcharSize);
 
