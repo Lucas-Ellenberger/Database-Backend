@@ -311,6 +311,7 @@ RC RBFM_ScanIterator::my_format_record(const vector<Attribute> &recordDescriptor
                 nullIndicator[i / 8] = nullIndicator[i / 8] | bitmask;
                 continue;
             }
+          
             switch (recordDescriptor[i].type)
             {
             case TypeInt:
@@ -319,6 +320,7 @@ RC RBFM_ScanIterator::my_format_record(const vector<Attribute> &recordDescriptor
                     memcpy(&data_integer, ((char *)data + offset), INT_SIZE);
                     include = intCompare(&data_integer);
                 }
+ 
                 // uint32_t data_integer;
                 memcpy(((char *)return_data + offset), ((char *)data + offset), INT_SIZE);
                 offset += INT_SIZE;
@@ -351,6 +353,7 @@ RC RBFM_ScanIterator::my_format_record(const vector<Attribute> &recordDescriptor
 
                     include = stringCompare(data_string, varcharSize);
                 }
+  
                 // First VARCHAR_LENGTH_SIZE bytes describe the varchar length
                 unsigned varcharSize;
                 memcpy(&varcharSize, ((char *)data + offset), VARCHAR_LENGTH_SIZE);
