@@ -382,6 +382,7 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
         return RBFM_SLOT_ALR_DELETED;
     };
 
+
     // Check if oldEntry is a forwarding address
     if (oldEntry.offset < 0)
     {
@@ -396,10 +397,30 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
             return RBFM_DELETE_FAILED;
         }
 
+        if (fileHandle.readPage(rid.pageNum, pageData))
+        {
+            free(pageData);
+            return RBFM_READ_FAILED;
+        }
+
+        setSlotDirectoryRecordEntry(pageData, rid.slotNum, oldEntry);
+
+        if (fileHandle.writePage(rid.pageNum, pageData))
+        {
+            free(pageData);
+            return RBFM_WRITE_FAILED;
+        }
+
         if (insertRecord(fileHandle, recordDescriptor, data, forwardingRid)) // After inserting, forwardingRid is updated with new rid
         {
             free(pageData);
             return RBFM_INSERT_FAILED;
+        }
+
+        if (fileHandle.readPage(rid.pageNum, pageData))
+        {
+            free(pageData);
+            return RBFM_READ_FAILED;
         }
 
         // Preps RecordEntry to be inserted in directory
@@ -420,12 +441,28 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
         free(pageData);
         return SUCCESS;
     }
+    cerr << "updateRecord: record data before the update:" << endl;
+    printRecord(recordDescriptor, (char *)data + oldEntry.offset);
 
     // Case when record is present on the page
     if (deleteRecord(fileHandle, recordDescriptor, rid))
     {
         free(pageData);
         return RBFM_DELETE_FAILED;
+    }
+    
+    if (fileHandle.readPage(rid.pageNum, pageData))
+    {
+        free(pageData);
+        return RBFM_READ_FAILED;
+    }
+
+    setSlotDirectoryRecordEntry(pageData, rid.slotNum, oldEntry);
+
+    if (fileHandle.writePage(rid.pageNum, pageData))
+    {
+        free(pageData);
+        return RBFM_WRITE_FAILED;
     }
 
     // Creates RID to be passed in insertRecord
@@ -437,6 +474,12 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
         return RBFM_INSERT_FAILED;
     }
 
+    if (fileHandle.readPage(rid.pageNum, pageData))
+    {
+        free(pageData);
+        return RBFM_READ_FAILED;
+    }
+
     // Preps RecordEntry to be inserted in directory
     SlotDirectoryRecordEntry newEntry;
     newEntry.offset = forwardingRid.pageNum * -1; // Multiply by -1 to set forwarding flag
@@ -444,6 +487,12 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
 
     // Update RecordEntry to have forwarding address
     setSlotDirectoryRecordEntry(pageData, rid.slotNum, newEntry); // Accesses old rid for slot number
+
+    if (fileHandle.writePage(rid.pageNum, pageData))
+    {
+        free(pageData);
+        return RBFM_WRITE_FAILED;
+    }
 
     free(pageData);
     return SUCCESS;
