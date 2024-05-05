@@ -609,12 +609,14 @@ RC RelationManager::readTuple(const string &tableName, const RID &rid, void *dat
 
     vector<Attribute> recordDescriptor;
     rc = getAttributes(tableName, recordDescriptor);
+    cerr << "readTuple: found " << recordDescriptor.size() << " descriptors." << endl;
     if (rc != SUCCESS) {
         catalog->closeFile(handle);
         return rc; 
     }
 
     rc = catalog->readRecord(handle, recordDescriptor, rid, data);
+    cerr << "readTuple: readRecord returned." << endl;
     if (rc != SUCCESS) {
         catalog->closeFile(handle);
         return rc; 
