@@ -9,35 +9,147 @@ ID#s and Names for others on the Team
 2. Catalogs/Metadata
 
 - Show your catalog design (Tables and Columns tables), and the information about each column in those catalogs.
+
+Tables table:
+
+        The Tables table stores information about each table including its unique table ID, name, and the corresponding
+    file name where the table data is stored. The columns within this table is listed in the order of table-id (int),
+    table-name (VarChar), file-name (VarChar). The table-id is our unique identifier for tables, and is needed in order
+    to obtain the column attributes from the columns table. The table-name column is the name which was provided when
+    createTable() is called. When a user tries to do any tuple operations, table-name is the condition which we compare
+    in order to find the corresponding table. The file-name stores the name of the file which we use to access when making
+    modification to any records. In our implementation, we had chosen to have the file name always match the name of the
+    table which allows us to efficently obtain and open table files.
+
+        The Tables table follows the same format as shown in the Project description. It does not contain any additional
+    attributes.
+
+    Tables
+    (1, "Tables", "Tables")
+    (2, "Columns", "Columns")
+    (3, "Employee", "Employee")
+
+Columns table:
+
+        The Columns table stores information regarding the tables in the Tables catalog. This includes the table ID to which
+    the column belongs, column name, column type, column type, and column position. These attributes are listed in the
+    order of, table-id (int), column-name (Varchar), column-type (int), column_length (int), and column-position (int).
+    Any operation on a table requires first obtaining the table-id from the Tables catalog and then scanning the columns
+    Table for the corresponding attributes. The column-name contains information on the name of the attribute. The column-type
+    has three different values, TypeInt, TypeReal, TypeVarChar, which allows the rm to manipulate the data accordingly.
+    For column-length, the value will be dependent on the column-type and lets us know how much space to allocate for
+    the attribute's data. Lastly column-position provides the postion of the attribute within that table.
+
+    Again, the Column table follows the same format as given in the Project description. It does not contian any additional attributes.
+
+    Columns
+    (1, "table-id", TypeInt, 4 , 1)
+    (1, "table-name", TypeVarChar, 50, 2)
+    (1, "file-name", TypeVarChar, 50, 3)
+    (2, "table-id", TypeInt, 4, 1)
+    (2, "column-name", TypeVarChar, 50, 2)
+    (2, "column-type", TypeInt, 4, 3)
+    (2, "column-length", TypeInt, 4, 4)
+    (2, "column-position", TypeInt, 4, 5)
+    (3, "empname", TypeVarChar, 30, 1)
+    (3, "age", TypeInt, 4, 2)
+    (3, "height", TypeReal, 4, 3)
+    (3, "salary", TypeInt, 4, 4)
+
+
+    On initalization of a catalog class instance, the Tables and Columns table are created and contain Metadata about its own attributes.
+
+
 - How do you distinguish catalogs (which can't be changed by Insert, Update and Delete statements) from other tables?
 
 
 3. Internal Record Format
 
 - Show your record format design, and describe how your design satisfies O(1) field access. If not, just mention that your team hasn't implemented this feature.
+
+        The internal formatting of our record stores the record is very similar to the format which 
+    was given. We added an array of shorts to hold the field offsets within a record.
+    So, our data is stored as null bytes, array of field offsets, and then the actual data.
+
+        The first n bytes of the record stores the null bytes. The number n can be determined by
+    the formula: ceil(number of fields in a record / 8). Each bit within a
+    byte correspondes to a field in the record. A 1 indicates the field is null 
+    and a 0 indicates the field is non:-null.
+
+        Following the array of field null indicators, data belonging to the fields are
+    stored sequentially. Any fields that have indicated as null from the previous
+    segment are disregarded here. For each field, fixed length fields such as
+    integers and floats are stored directly but variable length fields like VARCHARs
+    prefix the length of the field beforehand.
+
+        We had previously implemented O(1) field access in our record format in project1,
+    however, we decided to use the project 1 solution in order to spare us the trouble
+    of fixing any outstanding bugs we didn't encounter in the first test file.
+ 
 - Describe how you store a VarChar field.
+
+        VarChar fields are different from the other types of data we handle (Ints, Floats),
+    as they may have variable fixed field lengths. To deal with this, we prefix the
+    length of the Varchar field before the VarChar data. This allows us to dynamically
+    allocate memory without "wasting" more memory than we need. 
+
 - Describe how you deal with update of a VarChar field.
+
+        We deal with updating a VarChar field by replacing the existing VarChar field
+    entirely. We able to do this since we are passed the entirety of the record which contains
+    the VarChar field with its updated length prefix.
 
 
 4. Page Format
 
 - Show your page format design.
 - Describe how you deal with update of a record.
+
+    We deal with updating a record by locating a file by rid calling delete on the old record.
+    We then place a forwarding address in-place of the deleted record's header slot. This
+    forwarding address maps to a newly inserted record with the updated file. This adheres
+    to the persistency of keeping the same rid of the original record as rid still exists.
+    
 - Describe how you deal with delete of a record.
+
+    We first locate the record by rid. Then given that we know the size of the record since
+    we are passed a recordDescriptor, we wipe the record from the page and shift all sequenital
+    records by the length of the record we deleted. Following this, we update the deleted record's
+    to be flagged as deleted and update the offset of all the records we moved. This effectively
+    compacts the page.
 
 
 5. File Format
 
 - Show your file format design.
 
+At the RM level, files represent tables within the catalog. At the record based format manage level,
+files are managed as collections of pages where records are stored. Each page can store one or more
+records based on size. The whole file is dynamic where pages will be appended on demand.
+
+
 
 6. Implementation Detail
 
-Other implementation details goes here.  For example:  
-- Describe your use of Forwarding Addresses, including what happens when a Forwarding Address needs to be forwarded yet again to another page.
-- Describe how a scan is done, touching each record exactly once even when there are Forwarding Addresses.
-- Describe how you determine that a previously slot on a page is empty (after record is deleted), so that the slot can be re-used for another record.  (Yes, a record's rid is supposed to be permanent, but only while the record exists.)
+Forwarded Address:
 
+    We denote if a slto header is a forwarded address by having the value of the offset to be
+    of a negative value. If the slot is a forwarded address, we store the slot's offset to hold
+    the pagenum of the forward rid and the header slot's length holds the offset of the forward rid.
+
+Scan:
+
+    Upon calling scan, we create scan_iterator which is a class that contains information relating
+    to the table it is scanning. Through each iteration of the scan_iterator, scan_iterator goes through
+    each record until it finds a record that satisfies the search condition or if it reaches EOF. In the event
+    that the scan_iterator comes across a header slot that is contains a delete or forwarded address flag,
+    it will skip that record. This implementation works as we don't care about deleted records and because
+    scan_iterator iterates through the whole file, the scan_iterator will eventually scan the forwarded address.
+
+Deleted Records:
+
+    When we delete a record, the related header slot's length is given a negative value. This allows for any
+    operation that occurs on the header slots to identify that the slot's record was previously deleted.
 
 7. Other (optional)
 
