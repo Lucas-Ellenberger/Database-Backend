@@ -530,14 +530,14 @@ RC RelationManager::readTuple(const string &tableName, const RID &rid, void *dat
     rc = getAttributes(tableName, recordDescriptor);
     /* cerr << "readTuple: found " << recordDescriptor.size() << " descriptors." << endl; */
     if (rc != SUCCESS) {
-        cerr << "getAttributes rc: " << rc << endl;
+        /* cerr << "getAttributes rc: " << rc << endl; */
         catalog->closeFile(handle);
         return rc; 
     }
     rc = catalog->readRecord(handle, recordDescriptor, rid, data);
     /* cerr << "readTuple: readRecord returned." << endl; */
     if (rc != SUCCESS) {
-        cerr << "readRecord rc: " << rc << endl;
+        /* cerr << "readRecord rc: " << rc << endl; */
         catalog->closeFile(handle);
         return rc; 
     }
@@ -631,8 +631,9 @@ RC RelationManager::scan(const string &tableName,
 }
 RC RM_ScanIterator::scan(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const string &conditionAttribute, const CompOp compOp,
                                         const void *value, const vector<string> &attributeNames) {
-    RBFM_ScanIterator scanner;
-    return catalog->scan(fileHandle, recordDescriptor, conditionAttribute, compOp, value, attributeNames, scanner);
+    RBFM_ScanIterator scan = RBFM_ScanIterator();
+    this->rbfm_ScanIterator = &scan;
+    return catalog->scan(fileHandle, recordDescriptor, conditionAttribute, compOp, value, attributeNames, *rbfm_ScanIterator);
 }
 RC RM_ScanIterator::getNextTuple(RID &rid, void* data) {
     if (catalog == NULL) {
@@ -642,7 +643,7 @@ RC RM_ScanIterator::getNextTuple(RID &rid, void* data) {
     return rc;
 }
 RC RM_ScanIterator::close() {
-    catalog->closeFile(rm_scan_handle);
+    catalog->closeFile(*rm_scan_handle);
     return rbfm_ScanIterator->close();
 }
 // nameLength: size of record descriptor

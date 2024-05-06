@@ -39,7 +39,6 @@ RC TEST_RM_1(const string &tableName, const int nameLength, const string &name, 
     assert(rc == success && "RelationManager::getAttributes() should not fail.");
 
     // Initialize a NULL field indicator
-    cerr << "attrs.size(): " << attrs.size() << endl;
     int nullAttributesIndicatorActualSize = getActualByteForNullsIndicator(attrs.size());
     unsigned char *nullsIndicator = (unsigned char *) malloc(nullAttributesIndicatorActualSize);
 	memset(nullsIndicator, 0, nullAttributesIndicatorActualSize);
@@ -1023,61 +1022,61 @@ int main()
 
     rcmain = TEST_RM_3("tbl_employee", 6, "Thomas", 28, 6.5, 6000);
 
-    /* rcmain = TEST_RM_4("tbl_employee", 7, "Hoffman", 31, 5.8, 9999); */
+    rcmain = TEST_RM_4("tbl_employee", 7, "Hoffman", 31, 5.8, 9999);
 
-    /* rcmain = TEST_RM_5("tbl_employee", 6, "Martin", 26, 173.6, 8000); */
+    rcmain = TEST_RM_5("tbl_employee", 6, "Martin", 26, 173.6, 8000);
 
-    /* rcmain = TEST_RM_6("tbl_employee3"); */
+    rcmain = TEST_RM_6("tbl_employee3");
 
-    /* rcmain = TEST_RM_7("tbl_employee3"); */
+    rcmain = TEST_RM_7("tbl_employee3");
 
-    /* vector<RID> rids; */
-    /* vector<int> sizes; */
+    vector<RID> rids;
+    vector<int> sizes;
 
-	/* // Insert Tuple */
-    /* rcmain = TEST_RM_8("tbl_employee4", rids, sizes); */
+	// Insert Tuple
+    rcmain = TEST_RM_8("tbl_employee4", rids, sizes);
 
-    /* vector<RID> rids2; */
-    /* vector<int> sizes2; */
+    vector<RID> rids2;
+    vector<int> sizes2;
 
-	/* // Read Tuple */
-    /* rcmain = TEST_RM_09("tbl_employee4", rids2, sizes2); */
+	// Read Tuple
+    rcmain = TEST_RM_09("tbl_employee4", rids2, sizes2);
 
-    /* vector<RID> rids3; */
-    /* vector<int> sizes3; */
+    vector<RID> rids3;
+    vector<int> sizes3;
 
-	 /* // Update Tuple */
-    /* rcmain = TEST_RM_10("tbl_employee4", rids3, sizes3); */
+	 // Update Tuple
+    rcmain = TEST_RM_10("tbl_employee4", rids3, sizes3);
     
 
-    /* vector<RID> rids4; */
-    /* vector<int> sizes4; */
+    vector<RID> rids4;
+    vector<int> sizes4;
 
-	/* // Delete Tuple */
-    /* rcmain = TEST_RM_11("tbl_employee4", rids4); */
+	// Delete Tuple
+    rcmain = TEST_RM_11("tbl_employee4", rids4);
     
-    /* // Scan */
-    /* rcmain = TEST_RM_12("tbl_employee4"); */
+    // Scan
+    rcmain = TEST_RM_12("tbl_employee4");
 
-    /* // Scan with conditions */
-    /* rcmain = createTable("tbl_b_employee4"); */
-    /* rcmain = TEST_RM_13("tbl_b_employee4"); */
+    // Scan with conditions
+    rcmain = createTable("tbl_b_employee4");
+    rcmain = TEST_RM_13("tbl_b_employee4");
 
-	/* // Scan with conditions */
-    /* rcmain = createTable("tbl_b_employee5"); */
-    /* rcmain = TEST_RM_13b("tbl_b_employee5"); */
+	// Scan with conditions
+    rcmain = createTable("tbl_b_employee5");
+    rcmain = TEST_RM_13b("tbl_b_employee5");
 
-    /* // NOTE: your Tables table must be called "Tables" */
-    /* string catalog_table_name = "Tables"; */
+    // NOTE: your Tables table must be called "Tables"
+    string catalog_table_name = "Tables";
 
-    /* // Test Catalog Information */
-    /* rcmain = TEST_RM_14(catalog_table_name); */
+    // Test Catalog Information
+    rcmain = TEST_RM_14(catalog_table_name);
     
-    /* // NOTE: your Columns table must be called "Columns" */
-    /* string catalog_table_name_columns = "Columns"; */
+    // NOTE: your Columns table must be called "Columns"
+    string catalog_table_name_columns = "Columns";
 
-    /* // Test Catalog Information */
-    /* rcmain = TEST_RM_15(catalog_table_name_columns); */
+    // Test Catalog Information
+    rcmain = TEST_RM_15(catalog_table_name_columns);
     
     return 0;
 }

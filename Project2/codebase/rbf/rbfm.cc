@@ -88,9 +88,6 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
     SlotDirectoryHeader slotHeader = getSlotDirectoryHeader(pageData);
     // Setting up the return RID.
     rid.pageNum = i;
-    if (rid.pageNum > 306)
-        cerr << "found the diablo. rid.pageNum: " << rid.pageNum << endl;
-
     bool foundSlot = false;
     SlotDirectoryRecordEntry newRecordEntry;
     for (uint32_t slot = 0; slot < slotHeader.recordEntriesNumber; slot += 1)
@@ -283,7 +280,6 @@ RC RecordBasedFileManager::deleteRecord(FileHandle &fileHandle, const vector<Att
     // Loop over every record entry in the slot directory.
     // If the record offset was shifted (the starting offset is less than the one we deleted):
     // Then, add the length of the deleted record.
-    cerr << "Deleting a record of length: " << recordEntry.length << endl;
     unsigned shiftBeginning = sizeof(SlotDirectoryHeader) + slotHeader.recordEntriesNumber * sizeof(SlotDirectoryRecordEntry);
     unsigned shiftSize = recordEntry.offset - shiftBeginning;
 
@@ -538,9 +534,7 @@ RC RecordBasedFileManager::readAttribute(FileHandle &fileHandle, const vector<At
     {
         if (recordDescriptor[i].name == attributeName)
         {
-            cerr << "We found the attribue." << endl;
             if (fieldIsNull(nullIndicator, i)) {
-                cerr << "The attribue is null." << endl;
                 char val = 0x80;
                 memcpy(data, &val, 1);
                 free(pageData);
@@ -1094,7 +1088,7 @@ RC RBFM_ScanIterator::my_format_record(const vector<Attribute> &recordDescriptor
 }
 RC RBFM_ScanIterator::close()
 {
-    cerr << this->pageData <<endl;
+    /* cerr << this->pageData <<endl; */
     if (this->pageData != NULL)
         free(this->pageData);
     return SUCCESS;
@@ -1155,7 +1149,7 @@ bool RBFM_ScanIterator::acceptRecord(unsigned offset)
                 memcpy(&varcharSize, ((char *)pageData + data_offset), VARCHAR_LENGTH_SIZE);
                 data_offset += VARCHAR_LENGTH_SIZE;
                 // Gets the actual string.
-                cerr << "acceptRecord: found a varchar of size: " << varcharSize << endl;
+                /* cerr << "acceptRecord: found a varchar of size: " << varcharSize << endl; */
                 char *data_string = (char *)malloc(varcharSize + 1);
                 if (data_string == NULL) {
                     cerr << "acceptRecord: Unable to malloc data_string." << endl;
