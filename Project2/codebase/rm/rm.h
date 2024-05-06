@@ -27,7 +27,8 @@ public:
   RC getNextTuple(RID &rid, void *data);
   RC close();
 
-  FileHandle rm_scan_handle;
+  FileHandle* rm_scan_handle;
+  friend class RelationManager;
 private:
   RecordBasedFileManager *catalog = RecordBasedFileManager::instance();
   RBFM_ScanIterator *rbfm_ScanIterator;
