@@ -613,7 +613,7 @@ RC RelationManager::scan(const string &tableName,
     // if (rc != SUCCESS) {
     //     return rc;
     // }
-  
+    rm_ScanIterator.catalog = catalog;
     vector<Attribute> recordDescriptor;
     RC rc = getAttributes(tableName, recordDescriptor);
     if (rc != SUCCESS) {
@@ -631,7 +631,8 @@ RC RelationManager::scan(const string &tableName,
 }
 RC RM_ScanIterator::scan(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const string &conditionAttribute, const CompOp compOp,
                                         const void *value, const vector<string> &attributeNames) {
-    return catalog->scan(fileHandle, recordDescriptor, conditionAttribute, compOp, value, attributeNames, *rbfm_ScanIterator);
+    RBFM_ScanIterator scanner;
+    return catalog->scan(fileHandle, recordDescriptor, conditionAttribute, compOp, value, attributeNames, scanner);
 }
 RC RM_ScanIterator::getNextTuple(RID &rid, void* data) {
     if (catalog == NULL) {

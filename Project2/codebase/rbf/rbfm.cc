@@ -785,6 +785,7 @@ RBFM_ScanIterator::~RBFM_ScanIterator()
 void RBFM_ScanIterator::Open(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const string &conditionAttribute, const CompOp compOp,
                              const void *value, const vector<string> &attributeNames)
 {
+    this->pageNum = 0;
     this->fileHandle = &fileHandle;
     this->totalPages = fileHandle.getNumberOfPages();
     this->recordDescriptor = &recordDescriptor;
