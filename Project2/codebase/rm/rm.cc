@@ -1,29 +1,23 @@
-
 #include "rm.h"
 #include <cstring>
 #include <iostream>
 #include <cmath>
 
-// #define table "Tables"
-// #define column "Columns"
+
 
 RelationManager *RelationManager::_rm = 0;
 RelationManager *RelationManager::instance()
 {
     if (!_rm)
         _rm = new RelationManager();
-
     return _rm;
 }
-
 RelationManager::RelationManager()
 {
 }
-
 RelationManager::~RelationManager()
 {
 }
-
 RC RelationManager::createCatalog()
 {
     // we store each table here by name and id,
@@ -31,9 +25,7 @@ RC RelationManager::createCatalog()
     // for each attribute, we will store name and type
     // we do not have fixed length so we cannot store length.
     // we do not have any indexes so we will not store any information about indexes, same goes for constraints.
-
     RC rc;
-
     rc = catalog->createFile("Tables");
     if (rc != SUCCESS)
     {
@@ -47,7 +39,6 @@ RC RelationManager::createCatalog()
         cerr << "Unable to open Tables file" << endl;
         return rc;
     }
-
     // create "tables" table
     vector<Attribute> tableDescriptor;
     createTableRecordDescriptor(tableDescriptor);
@@ -55,22 +46,18 @@ RC RelationManager::createCatalog()
     int tableNullFieldsIndicatorActualSize = ceil((double)tableDescriptor.size() / CHAR_BIT);
     unsigned char nullsIndicatorTable[tableNullFieldsIndicatorActualSize];
     memset(nullsIndicatorTable, 0, tableNullFieldsIndicatorActualSize);
-
     // now create records
     RID rid;
     int recordSize = 0;
     void *record = malloc(200);
     void *returnedData = malloc(100);
-
     prepareTableRecord(tableDescriptor.size(), nullsIndicatorTable, 1, 6, "Tables", 6, "Tables", record, &recordSize); // not sure we actually need recordSize
     rc = catalog->insertRecord(tableHandle, tableDescriptor, record, rid);
-
     if (rc != SUCCESS)
     {
         cerr << "Unable to insert \"Table\" record into table Table" << endl;
         return rc;
     }
-
     prepareTableRecord(tableDescriptor.size(), nullsIndicatorTable, 2, 7, "Columns", 7, "Columns", record, &recordSize);
     rc = catalog->insertRecord(tableHandle, tableDescriptor, record, rid);
     if (rc != SUCCESS)
@@ -78,7 +65,6 @@ RC RelationManager::createCatalog()
         cerr << "Unable to insert \"Column\" record into table Table" << endl;
         return rc;
     }
-
     /* FileHandle columnHandle; */
     rc = catalog->createFile("Columns");
     if (rc != SUCCESS)
@@ -86,14 +72,12 @@ RC RelationManager::createCatalog()
         cerr << "Unable to create Columns file" << endl;
         return rc;
     }
-
     rc = catalog->openFile("Columns", columnHandle);
     if (rc != SUCCESS)
     {
         cerr << "Unable to open Columns file" << endl;
         return rc;
     }
-
     // create "columns" table
     vector<Attribute> columnDescriptor;
     createColumnRecordDescriptor(columnDescriptor);
@@ -101,10 +85,8 @@ RC RelationManager::createCatalog()
     int columnNullFieldsIndicatorActualSize = ceil((double)columnDescriptor.size() / CHAR_BIT);
     unsigned char nullsIndicatorColumn[columnNullFieldsIndicatorActualSize];
     memset(nullsIndicatorColumn, 0, columnNullFieldsIndicatorActualSize);
-
     // now create records
     recordSize = 0;
-
     string table_names[3] = {"table-id", "table-name", "file-name"};
     AttrType table_types[3] = {TypeInt, TypeVarChar, TypeVarChar};
     int table_size[3] = {4, 50, 50};
@@ -118,7 +100,6 @@ RC RelationManager::createCatalog()
             return rc;
         }
     }
-
     string column_names[5] = {"table-id", "column-name", "column-type", "column-length", "column-position"};
     AttrType column_types[5] = {TypeInt, TypeVarChar, TypeInt, TypeInt, TypeInt};
     int column_size[5] = {4, 50, 4, 4, 4};
@@ -132,33 +113,26 @@ RC RelationManager::createCatalog()
             return rc;
         }
     }
-
     table_id_count = 3;
     /* free(nullsIndicatorTable); */
     /* free(nullsIndicatorColumn); */
     free(record);
     free(returnedData);
-
     catalog->closeFile(tableHandle);
     catalog->closeFile(columnHandle);
-
     // After opening these files, I do not close them. I do not know if this the expected behavior or if I should close them
     return SUCCESS;
 }
-
 RC RelationManager::deleteCatalog()
 {
     if (catalog == NULL)
         return CATALOG_DSN_EXIST;
-
     catalog->closeFile(tableHandle);
     catalog->closeFile(columnHandle);
     catalog->destroyFile("Tables");
     catalog->destroyFile("Columns");
-
     return SUCCESS;
 }
-
 RC RelationManager::createTable(const string &tableName, const vector<Attribute> &attrs)
 {
     // have to check if table exists already, only way I see is by going through the catalog to see if there is already a table of the same name (idk how to do that yet)
@@ -168,21 +142,18 @@ RC RelationManager::createTable(const string &tableName, const vector<Attribute>
         cerr << "Unable to open Tables file" << endl;
         return rc;
     }
-
     rc = catalog->openFile("Columns", columnHandle);
     if (rc != SUCCESS)
     {
         cerr << "Unable to open Columns file" << endl;
         return rc;
     }
-
     rc = catalog->createFile(tableName);
     if (rc != SUCCESS)
     {
         cerr << "Unable to create " << tableName << " file" << endl;
         return TABLE_FILE_ALR_EXISTS;
     }
-
     FileHandle handle;
     rc = catalog->openFile(tableName, handle);
     if (rc != SUCCESS)
@@ -190,13 +161,11 @@ RC RelationManager::createTable(const string &tableName, const vector<Attribute>
         cerr << "Unable to open " << tableName << " file" << endl;
         return rc;
     }
-
     // prep variables for record
     RID rid;
     int recordSize = 0;
     void *record = malloc(100);
     void *returnedData = malloc(100);
-
     // prep variables for new table entry
     vector<Attribute> tableDescriptor;
     createTableRecordDescriptor(tableDescriptor);
@@ -204,7 +173,6 @@ RC RelationManager::createTable(const string &tableName, const vector<Attribute>
     int tableNullFieldsIndicatorActualSize = ceil((double)tableDescriptor.size() / CHAR_BIT);
     unsigned char nullsIndicatorTable[tableNullFieldsIndicatorActualSize];
     memset(nullsIndicatorTable, 0, tableNullFieldsIndicatorActualSize);
-
     // create "columns" table
     vector<Attribute> columnDescriptor;
     createColumnRecordDescriptor(columnDescriptor);
@@ -212,16 +180,13 @@ RC RelationManager::createTable(const string &tableName, const vector<Attribute>
     int columnNullFieldsIndicatorActualSize = ceil((double)columnDescriptor.size() / CHAR_BIT);
     unsigned char nullsIndicatorColumn[columnNullFieldsIndicatorActualSize];
     memset(nullsIndicatorColumn, 0, columnNullFieldsIndicatorActualSize);
-
     prepareTableRecord(tableDescriptor.size(), nullsIndicatorTable, table_id_count, tableName.size(), tableName, tableName.size(), tableName, record, &recordSize);
-
     rc = catalog->insertRecord(tableHandle, tableDescriptor, record, rid);
     if (rc != SUCCESS)
     {
         cerr << "Unable to insert " << tableName << " record into table Table" << endl;
         return rc;
     }
-
     int num_attrs = attrs.size();
     for (int i = 0; i < num_attrs; i += 1)
     {
@@ -233,17 +198,14 @@ RC RelationManager::createTable(const string &tableName, const vector<Attribute>
             return rc;
         }
     }
-
     table_id_count += 1;
     catalog->closeFile(handle);
     catalog->closeFile(columnHandle);
     catalog->closeFile(tableHandle);
     free(record);
     free(returnedData);
-
     return SUCCESS;
 }
-
 RC RelationManager::deleteTable(const string &tableName)
 {
     // go into Tables table, find table with name tableName, get its table-id, delete that record
@@ -257,12 +219,11 @@ RC RelationManager::deleteTable(const string &tableName)
 
     // Check if table file exists
     FileHandle tableFileHandle;
-    RC rc = catalog->openFile(tableName, tableFileHandle);
+    RC rc = catalog->openFile("Tables", tableFileHandle);
     if (rc != SUCCESS)
     {
         return rc;
     }
-
     // Prepare to scan the Tables file
     RBFM_ScanIterator tablesScanIterator;
     vector<string> tablesAttributesToRead = {"table-id", "table-name"};
@@ -271,7 +232,6 @@ RC RelationManager::deleteTable(const string &tableName)
     string conditionAttribute = "table-name";
     CompOp compOp = EQ_OP;
     void *value = (void *)tableName.c_str();
-
     // Create scan iterator
     rc = catalog->scan(tableFileHandle, tableDescriptor, conditionAttribute, compOp, value, tablesAttributesToRead, tablesScanIterator);
     if (rc != SUCCESS)
@@ -279,7 +239,6 @@ RC RelationManager::deleteTable(const string &tableName)
         catalog->closeFile(tableFileHandle);
         return 3;
     }
-
     // Use iterator to iterate through table file to find desired table
     RID rid;
     void *data = malloc(PAGE_SIZE);
@@ -295,24 +254,20 @@ RC RelationManager::deleteTable(const string &tableName)
     }
     tablesScanIterator.close();
     catalog->closeFile(tableFileHandle);
-
     // If table does not exist
     if (!found)
     {
-        cerr << "table not found" << endl;
         free(data);
         return 4;
     }
-
     //now we have the RID for the tuple for this table in the Tables table, and we need to use the table-id to delete everything out of the columns table
     // use the RID to delete the tuple out of the Tables table
-
     rc = deleteTuple("Tables", rid);
     if (rc != SUCCESS) {
         free(data);
         return 10;
     }
-
+    /* cerr << "-----------------------------------------------" << endl << "deleted tables entry" << endl << "table id is "  << tableID << "-----------------" << endl; */
     // Access the Columns file
     FileHandle columnFileHandle;
     rc = catalog->openFile("Columns", columnFileHandle);
@@ -321,7 +276,6 @@ RC RelationManager::deleteTable(const string &tableName)
         free(data);
         return 5;
     }
-
     // Prepare to scan the Columns file
     vector<string> columnsAttributesToRead = {"table-id", "column-name"};
     vector<Attribute> columnDescriptor;
@@ -329,7 +283,6 @@ RC RelationManager::deleteTable(const string &tableName)
     RBFM_ScanIterator columnsScanIterator;
     int tableIdValue = tableID;
     value = &tableIdValue;
-
     // Create scan iterator
     rc = catalog->scan(columnFileHandle, columnDescriptor, "table-id", compOp, value, columnsAttributesToRead, columnsScanIterator);
     if (rc != SUCCESS)
@@ -338,7 +291,6 @@ RC RelationManager::deleteTable(const string &tableName)
         free(data);
         return 6;
     }
-
     // Iterates through Columns table and adds matched attributes corresponding to tableID
     Attribute attr;
     vector<RID> column_rids_to_delete;
@@ -348,38 +300,31 @@ RC RelationManager::deleteTable(const string &tableName)
         RID rid_temp;
         rid_temp.pageNum = rid.pageNum;
         rid_temp.slotNum = rid.slotNum;
-        /* cerr << "rid.pageNum: " << rid.pageNum << " rid.slotNum: " << rid.slotNum << endl; */
-        /* cerr << "rid_temp.pageNum: " << rid_temp.pageNum << " rid_temp.slotNum: " << rid_temp.slotNum << endl; */
         column_rids_to_delete.push_back(rid_temp);
         //no values inside the tuples should matter, i just need to delete them, lets create a vector of RIDs
     }
-
     columnsScanIterator.close();
     catalog->closeFile(columnFileHandle);
-
+    /* cerr << "-------------" << endl << "closed column file" << endl << "--------------------" << endl; */
     //loop through all stored RIDs in the Columns table that need to be deleted and delete them
     for (unsigned i = 0; i < column_rids_to_delete.size(); i += 1){
-        /* cerr << "col_to_del[i].pageNum: " << column_rids_to_delete[i].pageNum << " rid_temp.slotNum: " << column_rids_to_delete[i].slotNum << endl; */
+        /* cerr << "deleting rid" << column_rids_to_delete[i].pageNum << endl << column_rids_to_delete[i].slotNum << endl; */
         rc = deleteTuple("Columns", column_rids_to_delete[i]);
         if (rc != SUCCESS) {
             free(data);
             return 11;
         }
     }
-
     free(data);
-    return 0;
-
+    
     // delete the actual table itself (no tuples need to be deleted since we're just destroying the file itself)
     rc = catalog->destroyFile(tableName);
     if (rc != SUCCESS) {
         free(data);
         return 12;
     }
-
     return SUCCESS;
 }
-
 RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &attrs)
 {
     // Check if catalog has been created
@@ -397,7 +342,6 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
         cerr << "getAttributes: open file failure." << endl;
         return rc;
     }
-
     // Prepare to scan the Tables file
     RBFM_ScanIterator tablesScanIterator;
     vector<string> tablesAttributesToRead = {"table-id", "table-name"};
@@ -406,7 +350,6 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
     string conditionAttribute = "table-name";
     CompOp compOp = EQ_OP;
     void *value = (void *)tableName.c_str();
-
     // Create scan iterator
     rc = catalog->scan(tableFileHandle, tableDescriptor, conditionAttribute, compOp, value, tablesAttributesToRead, tablesScanIterator);
     if (rc != SUCCESS)
@@ -415,7 +358,6 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
         catalog->closeFile(tableFileHandle);
         return 3;
     }
-
     // Use iterator to iterate through table file to find desired table
     RID rid;
     void *data = malloc(PAGE_SIZE);
@@ -423,16 +365,15 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
     bool found = false;
     while (tablesScanIterator.getNextRecord(rid, data) != RBFM_EOF)
     {
+        /* cerr << "we got into the get next record of get attributes" << endl; */
         /* rbfm->readRecord(tableFileHandle, tablesAttributesToRead, ) */
         int offset = int(ceil((double)tablesAttributesToRead.size() / CHAR_BIT)); // Have to account for empty nullIndicator
         memcpy(&tableID, (char *)data + offset, sizeof(int));              // Grabs tableID
         found = true;
         break; // Assuming table names are unique, we can break after the first match
     }
-
     tablesScanIterator.close();
     catalog->closeFile(tableFileHandle);
-
     // If table does not exist
     if (!found)
     {
@@ -440,7 +381,6 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
         free(data);
         return 4;
     }
-
     // Access the Columns file
     FileHandle columnFileHandle;
     rc = catalog->openFile("Columns", columnFileHandle);
@@ -450,7 +390,6 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
         free(data);
         return 5;
     }
-
     // Prepare to scan the Columns file
     vector<string> columnsAttributesToRead = {"column-name", "column-type", "column-length"};
     vector<Attribute> columnDescriptor;
@@ -458,7 +397,6 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
     RBFM_ScanIterator columnsScanIterator;
     int tableIdValue = tableID;
     value = &tableIdValue;
-
     // Create scan iterator
     string table_id = "table-id";
     // cerr << "calling scan for column table in get attribute with values" << endl;
@@ -479,7 +417,6 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
         free(data);
         return 6;
     }
-
     // Iterates through Columns table and adds matched attributes corresponding to tableID
     Attribute attr;
     // cerr << "calling column scan get next record" << endl;
@@ -487,7 +424,6 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
     {
         // cerr << "got to this point 2" << endl;
         int offset = int(ceil((double)columnDescriptor.size() / CHAR_BIT)); // Offset accounting for empty nullindicator
-
         // Grabs name of attribute
         int nameLen;
         memcpy(&nameLen, (char *)data + offset, sizeof(int));
@@ -497,57 +433,47 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
         name[nameLen] = '\0';
         attr.name = string(name);
         offset += nameLen;
-
         // Grabs type of attribute
         memcpy(&attr.type, (char *)data + offset, sizeof(int));
         offset += sizeof(int);
-
         // Grabs length of type
         memcpy(&attr.length, (char *)data + offset, sizeof(AttrLength));
         attrs.push_back(attr);
         free(name);
     }
-
     columnsScanIterator.close();
     catalog->closeFile(columnFileHandle);
     free(data);
     return SUCCESS;
 }
-
 RC RelationManager::insertTuple(const string &tableName, const void *data, RID &rid)
 {
     if (catalog == NULL)
     {
         return CATALOG_DSN_EXIST;
     }
-
     FileHandle tableFileHandle;
-    RC rc = catalog->openFile("Tables", tableFileHandle);
+    RC rc = catalog->openFile(tableName, tableFileHandle);
     if (rc != SUCCESS)
     {
         return rc; // Failed to open the file
     }
-
     vector<Attribute> attrs;
     getAttributes(tableName, attrs);
-
     rc = catalog->insertRecord(tableFileHandle, attrs, data, rid);
     catalog->closeFile(tableFileHandle);
     if (rc != SUCCESS)
     {
         return rc; // Return error if the insertion fails
     }
-
     return SUCCESS;
 }
-
 RC RelationManager::deleteTuple(const string &tableName, const RID &rid)
 {
     if (catalog == NULL)
     {
         return CATALOG_DSN_EXIST;
     }
-
     // Open file corresponding to the table name
     FileHandle handle;
     RC rc = catalog->openFile(tableName, handle);
@@ -555,92 +481,78 @@ RC RelationManager::deleteTuple(const string &tableName, const RID &rid)
     {
         return rc;
     }
-
     vector<Attribute> recordDescriptor; // Empty recordDescriptor since deleteRecord doesn't use it
-
     // Delete the record from the file
     rc = catalog->deleteRecord(handle, recordDescriptor, rid);
     catalog->closeFile(handle); // Always close the file handle regardless of the outcome
-
     if (rc != SUCCESS)
     {
         return rc; // Return error if the deletion fails
     }
-
     return SUCCESS;
 }
-
 RC RelationManager::updateTuple(const string &tableName, const void *data, const RID &rid)
 {
     if (catalog == NULL) {
         return CATALOG_DSN_EXIST;
     }
-
     FileHandle handle;
     RC rc = catalog->openFile(tableName, handle);
     if (rc != SUCCESS) {
         return rc; 
     }
-
     vector<Attribute> recordDescriptor;
     rc = getAttributes(tableName, recordDescriptor);
     if (rc != SUCCESS) {
         catalog->closeFile(handle);
         return rc;
     }
-
     rc = catalog->updateRecord(handle, recordDescriptor, data, rid);
     if (rc != SUCCESS) {
         catalog->closeFile(handle);
         return rc;
     }
-
     rc = catalog->closeFile(handle);
     return rc;
 }
-
 RC RelationManager::readTuple(const string &tableName, const RID &rid, void *data)
 {
     if (catalog == NULL) {
         return CATALOG_DSN_EXIST;
     }
-
     FileHandle handle;
     RC rc = catalog->openFile(tableName, handle);
     if (rc != SUCCESS) {
         return rc; 
     }
-
     vector<Attribute> recordDescriptor;
     rc = getAttributes(tableName, recordDescriptor);
     /* cerr << "readTuple: found " << recordDescriptor.size() << " descriptors." << endl; */
     if (rc != SUCCESS) {
+        cerr << "getAttributes rc: " << rc << endl;
         catalog->closeFile(handle);
         return rc; 
     }
-
     rc = catalog->readRecord(handle, recordDescriptor, rid, data);
     /* cerr << "readTuple: readRecord returned." << endl; */
     if (rc != SUCCESS) {
+        cerr << "readRecord rc: " << rc << endl;
         catalog->closeFile(handle);
         return rc; 
     }
-
     rc = catalog->closeFile(handle);
+    /* cerr << "closeFile rc: " << rc << endl; */
     return rc;
 }
-
 RC RelationManager::printTuple(const vector<Attribute> &attrs, const void *data)
 {
     if (catalog == NULL)
     {
         return CATALOG_DSN_EXIST;
     }
-
     RC rc = catalog->printRecord(attrs, data);
     return rc;
 }
-
 RC RelationManager::readAttribute(const string &tableName, const RID &rid, const string &attributeName, void *data)
 {
     if (catalog == NULL)
@@ -663,7 +575,7 @@ RC RelationManager::readAttribute(const string &tableName, const RID &rid, const
         catalog->closeFile(handle);
         return rc;
     }
-    
+
     // cerr << "printing out record descriptor" << endl;
     // cerr << "sizeof record descriptor" << recordDescriptor.size() << endl;
     // for (int i = 0; i < recordDescriptor.size(); i += 1) {
@@ -673,20 +585,18 @@ RC RelationManager::readAttribute(const string &tableName, const RID &rid, const
     // }
 
     // cerr << "printing from RM read attr" << endl;
-    // void* temp = malloc(PAGE_SIZE);
-    // catalog->readRecord(handle, recordDescriptor, rid, temp);
-    // catalog->printRecord(recordDescriptor, temp);
+    void* temp = malloc(PAGE_SIZE);
+    catalog->readRecord(handle, recordDescriptor, rid, temp);
+    catalog->printRecord(recordDescriptor, temp);
 
     rc = catalog->readAttribute(handle, recordDescriptor, rid, attributeName, data);
     if (rc != SUCCESS) {
         catalog->closeFile(handle);
         return rc;
     }
-
     rc = catalog->closeFile(handle);
     return rc;
 }
-
 RC RelationManager::scan(const string &tableName,
                          const string &conditionAttribute,
                          const CompOp compOp,
@@ -698,166 +608,138 @@ RC RelationManager::scan(const string &tableName,
         return CATALOG_DSN_EXIST;
     }
 
-    RC rc = catalog->openFile(tableName, rm_ScanIterator.rm_scan_handle);
-    if (rc != SUCCESS) {
-        return rc;
-    }
+    // RC rc = catalog->openFile(tableName, rm_ScanIterator.rm_scan_handle);
+    // if (rc != SUCCESS) {
+    //     return rc;
+    // }
   
     vector<Attribute> recordDescriptor;
-    rc = getAttributes(tableName, recordDescriptor);
+    RC rc = getAttributes(tableName, recordDescriptor);
     if (rc != SUCCESS) {
         catalog->closeFile(rm_ScanIterator.rm_scan_handle);
         return rc;
     }
-
+    rc = catalog->openFile(tableName, rm_ScanIterator.rm_scan_handle);
+    if (rc != SUCCESS) {
+        return rc;
+    }
     rc = rm_ScanIterator.scan(rm_ScanIterator.rm_scan_handle, recordDescriptor, conditionAttribute, compOp, value, attributeNames);
     return rc;
 }
-
 RC RM_ScanIterator::scan(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const string &conditionAttribute, const CompOp compOp,
                                         const void *value, const vector<string> &attributeNames) {
+    
     return catalog->scan(fileHandle, recordDescriptor, conditionAttribute, compOp, value, attributeNames, *rbfm_ScanIterator);
 }
-
 RC RM_ScanIterator::getNextTuple(RID &rid, void* data) {
     if (catalog == NULL) {
         return CATALOG_DSN_EXIST;
     }
-
     RC rc = rbfm_ScanIterator->getNextRecord(rid, data);
     return rc;
 }
-
 RC RM_ScanIterator::close() {
+    catalog->closeFile(rm_scan_handle);
     return rbfm_ScanIterator->close();
 }
-
-
 // nameLength: size of record descriptor
 void RelationManager::prepareTableRecord(const int fieldCount, unsigned char *nullFieldsIndicator, const int table_id, const int tableNameLength, 
         const string &table_name, const int fileNameLength, const string &file_name, void *buffer, int *recordSize)
 {
     int offset = 0;
     int nullFieldsIndicatorSize = ceil((double) fieldCount / CHAR_BIT);
-
     memcpy((char *)buffer + offset, nullFieldsIndicator, nullFieldsIndicatorSize);
     offset += nullFieldsIndicatorSize;
-
     memcpy((char *)buffer + offset, &table_id, sizeof(int));
     offset += sizeof(int);
-
     memcpy((char *)buffer + offset, &tableNameLength, sizeof(int));
     offset += sizeof(int);
     memcpy((char *)buffer + offset, table_name.c_str(), tableNameLength); // plus 1 for null terminator
     offset += tableNameLength;
-
     memcpy((char *)buffer + offset, &fileNameLength, sizeof(int));
     offset += sizeof(int);
     memcpy((char *)buffer + offset, file_name.c_str(), fileNameLength); // plus 1 for null terminator
     offset += fileNameLength;
-
     *recordSize = offset;
 }
-
 void RelationManager::prepareColumnRecord(const int fieldCount, unsigned char *nullFieldsIndicator, const int table_id, const int columnNameLength,
         const string &column_name, const int column_type, const int column_length, const int column_position, void *buffer, int *recordSize)
 {
     int offset = 0;
     int nullFieldsIndicatorSize = ceil((double) fieldCount / CHAR_BIT);
-
     memcpy((char *)buffer + offset, nullFieldsIndicator, nullFieldsIndicatorSize);
     offset += nullFieldsIndicatorSize;
-
     memcpy((char *)buffer + offset, &table_id, sizeof(int));
     offset += sizeof(int);
-
     memcpy((char *)buffer + offset, &columnNameLength, sizeof(int));
     offset += sizeof(int);
     memcpy((char *)buffer + offset, column_name.c_str(), columnNameLength);
     offset += columnNameLength;
-
     memcpy((char *)buffer + offset, &column_type, sizeof(int));
     offset += sizeof(int);
-
     memcpy((char *)buffer + offset, &column_length, sizeof(int));
     offset += sizeof(int);
-
     memcpy((char *)buffer + offset, &column_position, sizeof(int));
     offset += sizeof(int);
-
     *recordSize = offset;
 }
-
 void RelationManager::createTableRecordDescriptor(vector<Attribute> &recordDescriptor)
 {
-
     Attribute attr;
     attr.name = "table-id";
     attr.type = TypeInt;
     attr.length = (AttrLength)4;
     recordDescriptor.push_back(attr);
-
     attr.name = "table-name";
     attr.type = TypeVarChar;
     attr.length = (AttrLength)50;
     recordDescriptor.push_back(attr);
-
     attr.name = "file-name";
     attr.type = TypeVarChar;
     attr.length = (AttrLength)50;
     recordDescriptor.push_back(attr);
 }
-
 void RelationManager::createColumnRecordDescriptor(vector<Attribute> &recordDescriptor)
 {
-
     Attribute attr;
     attr.name = "table-id";
     attr.type = TypeInt;
     attr.length = (AttrLength)4;
     recordDescriptor.push_back(attr);
-
     attr.name = "column-name";
     attr.type = TypeVarChar;
     attr.length = (AttrLength)50;
     recordDescriptor.push_back(attr);
-
     attr.name = "column-type";
     attr.type = TypeInt;
     attr.length = (AttrLength)4;
     recordDescriptor.push_back(attr);
-
     attr.name = "column-length";
     attr.type = TypeInt;
     attr.length = (AttrLength)4;
     recordDescriptor.push_back(attr);
-
     attr.name = "column-position";
     attr.type = TypeInt;
     attr.length = (AttrLength)4;
     recordDescriptor.push_back(attr);
 }
-
 // Method will scan table file based on the given file name and will place the file name within filename argument.
 // Requires that tableDescriptor is already called with createTableRecordDescriptor beforehand
 RC findTableFileName(const string &tableName, RecordBasedFileManager *rbfm, FileHandle &tableFileHandle,
                      const vector<Attribute> tableDescriptor, string &fileName)
 {
     vector<string> attrsToRead = {"file-name"};
-
     // Setup scan iterator
     RBFM_ScanIterator rbfm_ScanIterator;
     string conditionAttribute = "table-name";
     CompOp compOp = EQ_OP;
     void *value = (void *)tableName.c_str();
-
     // Create Scan iterator
     RC rc = rbfm->scan(tableFileHandle, tableDescriptor, conditionAttribute, compOp, value, attrsToRead, rbfm_ScanIterator);
     if (rc != SUCCESS)
     {
         return rc;
     }
-
     RID rid;
     char data[PAGE_SIZE];
     if (rbfm_ScanIterator.getNextRecord(rid, &data) != RBFM_EOF)
@@ -868,7 +750,6 @@ RC findTableFileName(const string &tableName, RecordBasedFileManager *rbfm, File
         rbfm_ScanIterator.close();
         return SUCCESS;
     }
-
     rbfm_ScanIterator.close();
     return TB_DN_EXIST; // Table was not found
 }
