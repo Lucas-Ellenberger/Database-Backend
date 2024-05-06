@@ -617,14 +617,16 @@ RC RelationManager::scan(const string &tableName,
     vector<Attribute> recordDescriptor;
     RC rc = getAttributes(tableName, recordDescriptor);
     if (rc != SUCCESS) {
-        catalog->closeFile(rm_ScanIterator.rm_scan_handle);
+        catalog->closeFile(*(rm_ScanIterator.rm_scan_handle));
         return rc;
     }
-    rc = catalog->openFile(tableName, rm_ScanIterator.rm_scan_handle);
+    FileHandle handle;
+    rc = catalog->openFile(tableName, handle);
     if (rc != SUCCESS) {
         return rc;
     }
-    rc = rm_ScanIterator.scan(rm_ScanIterator.rm_scan_handle, recordDescriptor, conditionAttribute, compOp, value, attributeNames);
+    rm_ScanIterator.rm_scan_handle = &handle;
+    rc = rm_ScanIterator.scan(*(rm_ScanIterator.rm_scan_handle), recordDescriptor, conditionAttribute, compOp, value, attributeNames);
     return rc;
 }
 RC RM_ScanIterator::scan(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const string &conditionAttribute, const CompOp compOp,

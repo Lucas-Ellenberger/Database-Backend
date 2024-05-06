@@ -1068,13 +1068,14 @@ RC RBFM_ScanIterator::my_format_record(const vector<Attribute> &recordDescriptor
         // condition attribute does not exist in this record descriptor
         return -50;
     }
-    if (!include) {
+    if (!include && !(compOp == NO_OP || value == NULL)) {
         return DO_NOT_INCLUDE;
     }
     return SUCCESS;
 }
 RC RBFM_ScanIterator::close()
 {
+    cerr << this->pageData <<endl;
     if (this->pageData != NULL)
         free(this->pageData);
     return SUCCESS;
