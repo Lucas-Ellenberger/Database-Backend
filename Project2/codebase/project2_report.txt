@@ -1,10 +1,11 @@
 1. Basic information
 
-Team Number: 
-Student ID# of Submitter:
-Name of Submitter: 
+Team Number: 42
+Student ID# of Submitter: 1885381
+Name of Submitter: Bradley Haire
 ID#s and Names for others on the Team
-
+Lucas Ellenberger 1865864
+Harrison Nou 1849584
 
 2. Catalogs/Metadata
 
