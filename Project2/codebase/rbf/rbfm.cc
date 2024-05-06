@@ -248,6 +248,7 @@ RC RecordBasedFileManager::printRecord(const vector<Attribute> &recordDescriptor
     cout << "----" << endl;
     return SUCCESS;
 }
+
 RC RecordBasedFileManager::deleteRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const RID &rid)
 {
     // Retrieve the specified page
@@ -299,8 +300,11 @@ RC RecordBasedFileManager::deleteRecord(FileHandle &fileHandle, const vector<Att
     // Loop over every record entry in the slot directory.
     // If the record offset was shifted (the starting offset is less than the one we deleted):
     // Then, add the length of the deleted record.
+    cerr << "Deleting a record of length: " << recordEntry.length << endl;
     unsigned shiftBeginning = sizeof(SlotDirectoryHeader) + slotHeader.recordEntriesNumber * sizeof(SlotDirectoryRecordEntry);
     unsigned shiftSize = recordEntry.offset - shiftBeginning;
+    cerr << "we are memmoving: " << shiftSize << " bytes, to address starting at: " << shiftBeginning + recordEntry.length << endl;
+    cerr << "old offset of: " << recordEntry.offset << endl;
     memmove((char *)pageData + shiftBeginning + recordEntry.length, (char *)pageData + shiftBeginning, shiftSize);
     // Zero out the the where the data used to be.
     memset((char *)pageData + shiftBeginning, 0, recordEntry.length);
@@ -749,6 +753,7 @@ void RecordBasedFileManager::getRecordAtOffset(void *page, unsigned offset, cons
         data_offset += fieldSize;
     }
 }
+
 void RecordBasedFileManager::setRecordAtOffset(void *page, unsigned offset, const vector<Attribute> &recordDescriptor, const void *data)
 {
     // Read in the null indicator
@@ -756,17 +761,20 @@ void RecordBasedFileManager::setRecordAtOffset(void *page, unsigned offset, cons
     char nullIndicator[nullIndicatorSize];
     memset(nullIndicator, 0, nullIndicatorSize);
     memcpy(nullIndicator, (char *)data, nullIndicatorSize);
+
     // Points to start of record
     char *start = (char *)page + offset;
     // Offset into *data
     unsigned data_offset = nullIndicatorSize;
     // Offset into page header
     unsigned header_offset = 0;
+
     RecordLength len = recordDescriptor.size();
     memcpy(start + header_offset, &len, sizeof(len));
     header_offset += sizeof(len);
     memcpy(start + header_offset, nullIndicator, nullIndicatorSize);
     header_offset += nullIndicatorSize;
+
     // Keeps track of the offset of each record
     // Offset is relative to the start of the record and points to the END of a field
     ColumnOffset rec_offset = header_offset + (recordDescriptor.size()) * sizeof(ColumnOffset);
@@ -801,12 +809,14 @@ void RecordBasedFileManager::setRecordAtOffset(void *page, unsigned offset, cons
                 break;
             }
         }
+
         // Copy offset into record header
         // Offset is relative to the start of the record and points to END of field
         memcpy(start + header_offset, &rec_offset, sizeof(ColumnOffset));
         header_offset += sizeof(ColumnOffset);
     }
 }
+
 // RBFM_ScanIterator is an iterator to go through records
 // The way to use it is like the following:
 //  RBFM_ScanIterator rbfmScanIterator;
@@ -815,12 +825,15 @@ void RecordBasedFileManager::setRecordAtOffset(void *page, unsigned offset, cons
 //    process the data;
 //  }
 //  rbfmScanIterator.close();
+
 RBFM_ScanIterator::RBFM_ScanIterator()
 {
 }
+
 RBFM_ScanIterator::~RBFM_ScanIterator()
 {
 }
+
 void RBFM_ScanIterator::Open(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const string &conditionAttribute, const CompOp compOp,
                              const void *value, const vector<string> &attributeNames)
 {
@@ -840,6 +853,7 @@ void RBFM_ScanIterator::Open(FileHandle &fileHandle, const vector<Attribute> &re
     if (pageData == NULL)
         cerr << "Open: unable to malloc pageData." << endl;
 }
+
 // Never keep the results in the memory. When getNextRecord() is called,
 // a satisfying record needs to be fetched from the file.
 // "data" follows the same format as RecordBasedFileManager::insertRecord().
@@ -965,6 +979,7 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data)
     }
     return RBFM_EOF;
 }
+
 RC RBFM_ScanIterator::my_format_record(const vector<Attribute> &recordDescriptor, const void *data, const vector<string> &attributeNames, const void *return_data, const string &conditionAttribute, const CompOp compOp, uint32_t* length_of_record_to_return)
 {
     /* rbfm->printRecord(recordDescriptor, data); */
