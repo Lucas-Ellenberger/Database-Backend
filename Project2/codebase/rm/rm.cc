@@ -267,7 +267,7 @@ RC RelationManager::deleteTable(const string &tableName)
         free(data);
         return 10;
     }
-    cerr << "-----------------------------------------------" << endl << "deleted tables entry" << endl << "table id is "  << tableID << "-----------------" << endl;
+  
     // Access the Columns file
     FileHandle columnFileHandle;
     rc = catalog->openFile("Columns", columnFileHandle);
@@ -305,10 +305,8 @@ RC RelationManager::deleteTable(const string &tableName)
     }
     columnsScanIterator.close();
     catalog->closeFile(columnFileHandle);
-    cerr << "-------------" << endl << "closed column file" << endl << "--------------------" << endl;
     //loop through all stored RIDs in the Columns table that need to be deleted and delete them
     for (unsigned i = 0; i < column_rids_to_delete.size(); i += 1){
-        cerr << "deleting rid" << column_rids_to_delete[i].pageNum << endl << column_rids_to_delete[i].slotNum << endl;
         rc = deleteTuple("Columns", column_rids_to_delete[i]);
         if (rc != SUCCESS) {
             free(data);
@@ -365,7 +363,6 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
     bool found = false;
     while (tablesScanIterator.getNextRecord(rid, data) != RBFM_EOF)
     {
-        cerr << "we got into the get next record of get attributes" << endl;
         /* rbfm->readRecord(tableFileHandle, tablesAttributesToRead, ) */
         int offset = int(ceil((double)tablesAttributesToRead.size() / CHAR_BIT)); // Have to account for empty nullIndicator
         memcpy(&tableID, (char *)data + offset, sizeof(int));              // Grabs tableID
@@ -529,16 +526,19 @@ RC RelationManager::readTuple(const string &tableName, const RID &rid, void *dat
     rc = getAttributes(tableName, recordDescriptor);
     /* cerr << "readTuple: found " << recordDescriptor.size() << " descriptors." << endl; */
     if (rc != SUCCESS) {
+        cerr << "getAttributes rc: " << rc << endl;
         catalog->closeFile(handle);
         return rc; 
     }
     rc = catalog->readRecord(handle, recordDescriptor, rid, data);
     /* cerr << "readTuple: readRecord returned." << endl; */
     if (rc != SUCCESS) {
+        cerr << "readRecord rc: " << rc << endl;
         catalog->closeFile(handle);
         return rc; 
     }
     rc = catalog->closeFile(handle);
+    /* cerr << "closeFile rc: " << rc << endl; */
     return rc;
 }
 RC RelationManager::printTuple(const vector<Attribute> &attrs, const void *data)
@@ -625,6 +625,7 @@ RC RelationManager::scan(const string &tableName,
 }
 RC RM_ScanIterator::scan(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const string &conditionAttribute, const CompOp compOp,
                                         const void *value, const vector<string> &attributeNames) {
+    
     return catalog->scan(fileHandle, recordDescriptor, conditionAttribute, compOp, value, attributeNames, *rbfm_ScanIterator);
 }
 RC RM_ScanIterator::getNextTuple(RID &rid, void* data) {
@@ -635,6 +636,7 @@ RC RM_ScanIterator::getNextTuple(RID &rid, void* data) {
     return rc;
 }
 RC RM_ScanIterator::close() {
+    catalog->closeFile(rm_scan_handle);
     return rbfm_ScanIterator->close();
 }
 // nameLength: size of record descriptor
