@@ -1,10 +1,11 @@
 1. Basic information
 
-Team Number: 
-Student ID# of Submitter:
-Name of Submitter: 
+Team Number: 42
+Student ID# of Submitter: 1885381
+Name of Submitter: Bradley Haire
 ID#s and Names for others on the Team
-
+Lucas Ellenberger 1865864
+Harrison Nou 1849584
 
 2. Catalogs/Metadata
 
@@ -154,3 +155,6 @@ Deleted Records:
 7. Other (optional)
 
 - Freely use this section to tell us about things that are related to the project 2, but not related to the other sections, such as design and implementation information for the Advanced (Extra Credit) Features, if you've implemented them (optional).
+
+
+As it stands, our code fails on test case 6 while we have been testing it. We believe we pass cases 0-5, and in addition, when case 6 and 7 are skipped, we pass cases 8 and 9 as well. Our code manages to delete tables, and will succeed when you call ./rmtest_delete_tables.
