@@ -52,6 +52,7 @@ RC IndexManager::createFile(const string &fileName)
     if (handle.appendPage(headerPageData))
         return IX_APPEND_FAILED;
 
+    _pf_manager->closeFile(handle);
     free(headerPageData);
 
     void * firstInternalPageData = calloc(PAGE_SIZE, 1);
@@ -59,7 +60,7 @@ RC IndexManager::createFile(const string &fileName)
         return IX_MALLOC_FAILED;
     
     // TODO: Implement helper function.
-    newInternalPage(firstInternalPageData);
+    newInternalPage(firstInternalPageData, -1/* leftChildPageNum */);
 
     if (handle.appendPage(firstInternalPageData))
         return IX_APPEND_FAILED;
@@ -77,12 +78,12 @@ RC IndexManager::destroyFile(const string &fileName)
 
 RC IndexManager::openFile(const string &fileName, IXFileHandle &ixfileHandle)
 {
-    return _pf_manager->openFile(fileName.c_str(), fileHandle);
+    return _pf_manager->openFile(fileName.c_str(), ixfileHandle);
 }
 
 RC IndexManager::closeFile(IXFileHandle &ixfileHandle)
 {
-    return _pf_manager->closeFile(fileHandle);
+    return _pf_manager->closeFile(ixfileHandle);
 }
 
 RC IndexManager::insertEntry(IXFileHandle &ixfileHandle, const Attribute &attribute, const void *key, const RID &rid)
@@ -142,9 +143,105 @@ IXFileHandle::~IXFileHandle()
 
 RC IXFileHandle::collectCounterValues(unsigned &readPageCount, unsigned &writePageCount, unsigned &appendPageCount)
 {
-    readPageCount = readPageCounter;
-    writePageCount = writePageCounter;
-    appendPageCount = appendPageCounter;
+    readPageCount = ixReadPageCounter;
+    writePageCount = ixWritePageCounter;
+    appendPageCount = ixAppendPageCounter;
     return SUCCESS;
+}
+
+void IndexManager::newHeaderPage(void *pageData)
+{
+    memset(pageData, 0, PAGE_SIZE);
+    // Write the header page struct.
+    MetaDataHeader metaHeader;
+    metaHeader.rootPageNum = 1;
+    setMetaDataHeader(pageData, metaHeader);
+}
+
+void IndexManager::setMetaDataHeader(void *pageData, MetaDataHeader metaHeader)
+{
+    // Setting the metadata header.
+    memcpy(pageData, &metaHeader, sizeof(MetaDataHeader));
+}
+
+MetaDataHeader IndexManager::getMetaDataHeader(void *pageData)
+{
+    // Getting the metadata header.
+    MetaDataHeader metaHeader;
+    memcpy(&metaHeader, pageData, sizeof(MetaDataHeader));
+    return metaHeader;
+}
+
+void IndexManager::newInternalPage(void *pageData, int leftChildPageNum)
+{
+    memset(pageData, 0, PAGE_SIZE);
+    // Write internal page header.
+    IndexHeader internalHeader;
+    internalHeader.leaf = false;
+    internalHeader.dataEntryNumber = 0;
+    internalHeader.freeSpaceOffset = PAGE_SIZE;
+    internalHeader.leftChildPageNum = leftChildPageNum;
+    // Initialize values, even if they aren't needed.
+    // Page num 0 will always be the meta data page, so this is an invalid internal or leaf page.
+    internalHeader.nextSiblingPageNum = 0;
+    internalHeader.prevSiblingPageNum = 0;
+    setIndexHeader(pageData, internalHeader);
+}
+
+void IndexManager::newLeafPage(void *pageData, int nextSiblingPageNum, int prevSiblingPageNum)
+{
+    memset(pageData, 0, PAGE_SIZE);
+    // Write Leaf Header struct.
+    IndexHeader newHeader;
+    newHeader.leaf = true;
+    newHeader.dataEntryNumber = 0;
+    newHeader.nextSiblingPageNum = nextSiblingPageNum;
+    newHeader.prevSiblingPageNum = prevSiblingPageNum;
+    newHeader.freeSpaceOffset = PAGE_SIZE;
+    // Initialize values, even if they aren't needed.
+    // Page num 0 will always be the meta data page, so this is an invalid internal or leaf page.
+    newHeader.leftChildPageNum = 0;
+    setIndexHeader(pageData, newHeader);
+}
+
+void IndexManager::setIndexHeader(void *pageData, IndexHeader indexHeader)
+{
+    // Set the index header.
+    memcpy(pageData, &indexHeader, sizeof(IndexHeader));
+}
+
+IndexHeader IndexManager::getIndexHeader(void *pageData)
+{
+    // Get Index Header.
+    IndexHeader indexHeader;
+    memcpy(&indexHeader, pageData, sizeof(IndexHeader));
+    return indexHeader;
+}
+
+void IndexManager::setIndexDataEntry(void *pageData, unsigned indexEntryNumber, IndexDataEntry dataEntry)
+{
+    // Setting the index data entry.
+    memcpy(
+            ((char *) pageData + sizeof(IndexHeader) + (indexEntryNumber * sizeof(IndexDataEntry))),
+            &dataEntry,
+            sizeof(IndexDataEntry)
+          );
+}
+
+IndexDataEntry IndexManager::getIndexDataEntry(void *pageData, unsigned indexEntryNumber)
+{
+    IndexDataEntry dataEntry;
+    memcpy(
+            &dataEntry,
+            ((char *) pageData + sizeof(IndexHeader) + (indexEntryNumber * sizeof(IndexDataEntry))),
+            sizeof(IndexDataEntry)
+          );
+    return dataEntry;
+}
+
+unsigned IndexManager::getPageFreeSpaceSize(void *pageData)
+{
+    IndexHeader indexHeader = getIndexHeader(pageData);
+    return indexHeader.freeSpaceOffset - (indexHeader.dataEntryNumber * sizeof(IndexDataEntry) - sizeof(IndexHeader));
 }
 
