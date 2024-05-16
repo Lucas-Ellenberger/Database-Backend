@@ -87,8 +87,15 @@ RC IndexManager::closeFile(IXFileHandle &ixfileHandle)
 }
 
 RC IndexManager::insertEntry(IXFileHandle &ixfileHandle, const Attribute &attribute, const void *key, const RID &rid)
-{
-    return -1;
+{  
+    // First create data entry to be inserted
+    IndexDataEntry newDataEntry;
+    newDataEntry.key = NULL; 
+    newDataEntry.rid;
+
+    unsigned rootPageNum = getRootPage(ixfileHandle); // TO-DO: need to implement getRootPage(), should retrieve the root page from meta data page
+
+    return insert(attribute, key, rid, ixfileHandle, newDataEntry, rootPageNum); // Will recursively walk down tree until it finds leaf page to insert
 }
 
 RC IndexManager::deleteEntry(IXFileHandle &ixfileHandle, const Attribute &attribute, const void *key, const RID &rid)
@@ -245,3 +252,60 @@ unsigned IndexManager::getPageFreeSpaceSize(void *pageData)
     return indexHeader.freeSpaceOffset - (indexHeader.dataEntryNumber * sizeof(IndexDataEntry) - sizeof(IndexHeader));
 }
 
+RC IndexManager::insert(const Attribute &attr, const void *key, const RID &rid, IXFileHandle &fileHandle, IndexDataEntry &newIndexDataEntry, unsigned pageNum){
+    void *pageData = malloc(PAGE_SIZE);
+
+    if (fileHandle.readPage(pageNum, pageData) != SUCCESS){ // Assuming that IXFileHandle has identical methods as other FileHandle class
+        free(pageData);
+        return IX_READ_FAILED;
+    }
+    
+    // Checks if current page is a leaf or internal page
+    if (isNonLeaf(pageData)){ // If internal page, get child page, and recursively call insert
+        unsigned childPageNum = getChildPageNum(pageData, key, attr); // TO-DO: Should look through data entries by corresponding key value and grab child page num
+        RC rc = insert(attr, key, rid, fileHandle, newIndexDataEntry, childPageNum); 
+        if (newIndexDataEntry.key != NULL){
+            rc = insertInInternal(pageData, pageNum, newIndexDataEntry); // This will be called at every backtrack level until we find space to insert 
+            if (rc == IX_INTERNAL_SPLIT){
+                rc = splitInternal(pageData, newIndexDataEntry);
+            }
+        }
+    } else { // If leaf page, attempt to insert data entry in leaf
+        RC rc = insertInLeaf(attr, key, rid, pageData); // TO-DO: Should return 0 if successfully inserted, return IX_LEAF_SPLIT if split is needed 
+        if (rc == IX_LEAF_SPLIT) {
+            rc = splitLeaf(pageData, newIndexDataEntry); // TO-DO: Should split leaf page into two, find in parent if needed.
+        }
+        fileHandle.writePage(pageNum, pageData);
+    }
+
+    free(pageData);
+    return SUCCESS;
+}
+
+unsigned IndexManager::getRootPage(IXFileHandle &fileHandle){
+    // Should grab root page from meta data page
+}
+
+bool IndexManager::isNonLeaf(void *pageData){
+    // Should check flag of current page, return true if page is non-leaf and false if page is leaf
+}
+
+unsigned IndexManager::getChildPageNum(void *pageData, const void *key, const Attribute &attr){
+    // Should look through internal data entries by key and return child page num
+}
+
+RC IndexManager::insertInInternal(void *pageData, unsigned pageNum, IndexDataEntry &newIndexDataEntry){
+    // Should attempt to place internal "traffic cop" within page. If successful, set key within data entry to null 
+}
+
+RC IndexManager::splitInternal(void*pageData, IndexDataEntry &newIndexDataEntry){
+    // Should split internal page into two
+}
+
+RC IndexManager::insertInLeaf(const Attribute &attr, const void *key, const RID &rid, void *pageData){
+    // Should return SUCCESS if new data entry is inserted into leaf page. If page is full, return IX_INSERT_SPLIT 
+}
+
+RC IndexManager::splitLeaf(void *pageData, IndexDataEntry &newIndexDataEntry){
+    // Should split leaf into two, insert the newIndexDataEntry, and pass middle key value back in struct to signify split.
+}

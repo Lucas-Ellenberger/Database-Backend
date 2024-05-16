@@ -15,6 +15,8 @@
 # define IX_SLOT_DN_EXIST   16
 # define IX_READ_AFTER_DEL  17
 # define IX_NO_SUCH_ATTR    18
+# define IX_LEAF_SPLIT      19
+# define IX_INTERNAL_SPLIT  20
 
 # define IX_EOF (-1)  // end of the index scan
 
@@ -95,6 +97,14 @@ class IndexManager {
         void setIndexDataEntry(void *pageData, unsigned indexEntryNumber, IndexDataEntry dataEntry);
         IndexDataEntry getIndexDataEntry(void *pageData, unsigned indexEntryNumber);
         unsigned getPageFreeSpaceSize(void *pageData);
+        RC insert(const Attribute &attr, const void *key,const Rid &rid, IXFileHandle &fileHandle, IndexDataEntry &newIndexDataEntry, unsigned pageNum);
+        unsigned getRootPage(IXFileHandle &fileHandle);
+        bool isNonLeaf(void *pageData);
+        unsigned getChildPageNum(void *pageData, const void *key, const Attribute &attr);
+        RC insertInternal(void *pageData, unsigned pageNum, IndexDataEntry &newIndexDataEntry);
+        RC insertInLeaf(const Attribute &attr, const void *key, const RID &rid, void *pageData);
+        RC splitLeaf(void *pageData, IndexDataEntry &newIndexDataEntry);
+        RC splitInternal(void *pageData, IndexDataEntry &newIndexDataEntry);
 };
 
 
