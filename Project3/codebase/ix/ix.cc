@@ -1,7 +1,16 @@
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <iomanip>
+#include <iostream>
+#include <string>
 
 #include "ix.h"
 
 IndexManager* IndexManager::_index_manager = 0;
+PagedFileManager *RecordBasedFileManager::_pf_manager = NULL;
 
 IndexManager* IndexManager::instance()
 {
@@ -13,6 +22,8 @@ IndexManager* IndexManager::instance()
 
 IndexManager::IndexManager()
 {
+    // Initialize the internal IndexManager instance.
+    _pf_manager = PagedFileManager::instance();
 }
 
 IndexManager::~IndexManager()
@@ -21,22 +32,57 @@ IndexManager::~IndexManager()
 
 RC IndexManager::createFile(const string &fileName)
 {
-    return -1;
+    // Creating a new paged file.
+    if (_pf_manager->createFile(fileName))
+        return IX_CREATE_FAILED;
+
+    // Setting up the header page.
+    void * headerPageData = calloc(PAGE_SIZE, 1);
+    if (headerPageData == NULL)
+        return IX_MALLOC_FAILED;
+
+    // TODO: Implement helper function.
+    newHeaderPage(headerPageData);
+
+    // Adds the meta data page.
+    FileHandle handle;
+    if (_pf_manager->openFile(fileName.c_str(), handle))
+        return IX_OPEN_FAILED;
+
+    if (handle.appendPage(headerPageData))
+        return IX_APPEND_FAILED;
+
+    free(headerPageData);
+
+    void * firstInternalPageData = calloc(PAGE_SIZE, 1);
+    if (firstInternalPageData == NULL)
+        return IX_MALLOC_FAILED;
+    
+    // TODO: Implement helper function.
+    newInternalPage(firstInternalPageData);
+
+    if (handle.appendPage(firstInternalPageData))
+        return IX_APPEND_FAILED;
+
+    _pf_manager->closeFile(handle);
+    free(firstInternalPageData);
+
+    return SUCCESS;
 }
 
 RC IndexManager::destroyFile(const string &fileName)
 {
-    return -1;
+    return _pf_manager->destroyFile(fileName);
 }
 
 RC IndexManager::openFile(const string &fileName, IXFileHandle &ixfileHandle)
 {
-    return -1;
+    return _pf_manager->openFile(fileName.c_str(), fileHandle);
 }
 
 RC IndexManager::closeFile(IXFileHandle &ixfileHandle)
 {
-    return -1;
+    return _pf_manager->closeFile(fileHandle);
 }
 
 RC IndexManager::insertEntry(IXFileHandle &ixfileHandle, const Attribute &attribute, const void *key, const RID &rid)
@@ -96,6 +142,9 @@ IXFileHandle::~IXFileHandle()
 
 RC IXFileHandle::collectCounterValues(unsigned &readPageCount, unsigned &writePageCount, unsigned &appendPageCount)
 {
-    return -1;
+    readPageCount = readPageCounter;
+    writePageCount = writePageCounter;
+    appendPageCount = appendPageCounter;
+    return SUCCESS;
 }
 
