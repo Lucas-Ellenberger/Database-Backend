@@ -17,6 +17,7 @@
 # define IX_NO_SUCH_ATTR    18
 # define IX_LEAF_SPLIT      19
 # define IX_INTERNAL_SPLIT  20
+# define IX_EXISTING_ENTRY  21
 
 # define IX_EOF (-1)  // end of the index scan
 
@@ -41,12 +42,6 @@ typedef struct IndexDataEntry
     int key;
     RID rid;
 } IndexDataEntry;
-
-typedef struct InternalDataEntry
-{
-    void *key;
-    unsigned pageNum;
-}
 
 class IX_ScanIterator;
 class IXFileHandle;
