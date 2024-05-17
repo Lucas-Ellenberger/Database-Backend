@@ -317,7 +317,7 @@ unsigned IndexManager::getChildPageNum(void *pageData, const void *key, const At
 
     
         int result = compareKey(pageData, key, attr, entryOffset);
-        if (result < 0) { // If the provided key is less than the current entry's key, return the last child page number encountered
+        if (result == -1) { // If the provided key is less than the current entry's key, return the last child page number encountered
             return lastChildPage;
         } else if (result == 0) {
             return -2; // Returns -2 for duplicate data entry
