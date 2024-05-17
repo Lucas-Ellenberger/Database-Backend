@@ -252,7 +252,7 @@ unsigned IndexManager::getPageFreeSpaceSize(void *pageData)
     return indexHeader.freeSpaceOffset - (indexHeader.dataEntryNumber * sizeof(IndexDataEntry) - sizeof(IndexHeader));
 }
 
-RC IndexManager::insert(const Attribute &attr, const void *key, const RID &rid, IXFileHandle &fileHandle, IndexDataEntry &newIndexDataEntry, unsigned pageNum){
+RC IndexManager::insert(const Attribute &attr, const void *key, const Rid &rid, IXFileHandle &fileHandle, IndexDataEntry &newIndexDataEntry, unsigned pageNum){
     void *pageData = malloc(PAGE_SIZE);
 
     if (fileHandle.readPage(pageNum, pageData) != SUCCESS){ // Assuming that IXFileHandle has identical methods as other FileHandle class
@@ -284,6 +284,18 @@ RC IndexManager::insert(const Attribute &attr, const void *key, const RID &rid, 
 
 unsigned IndexManager::getRootPage(IXFileHandle &fileHandle){
     // Should grab root page from meta data page
+
+    void *pageData = malloc(PAGE_SIZE);
+    if (fileHandle.readPage(0, pageData) != SUCCESS){ // Assumption that the meta page is on page 0 of the file
+        free(pageData);
+        return IX_READ_FAILED;
+    }
+
+    MetaDataHeader metaHeader = getMetaDataHeader(pageData);
+    unsigned rootPageNum = metaHeader.rootPageNum;
+    free(pageData);
+    return rootPageNum;
+
 }
 
 bool IndexManager::isNonLeaf(void *pageData){

@@ -42,6 +42,12 @@ typedef struct IndexDataEntry
     RID rid;
 } IndexDataEntry;
 
+typedef struct InternalDataEntry
+{
+    void *key;
+    unsigned pageNum;
+}
+
 class IX_ScanIterator;
 class IXFileHandle;
 
@@ -97,14 +103,15 @@ class IndexManager {
         void setIndexDataEntry(void *pageData, unsigned indexEntryNumber, IndexDataEntry dataEntry);
         IndexDataEntry getIndexDataEntry(void *pageData, unsigned indexEntryNumber);
         unsigned getPageFreeSpaceSize(void *pageData);
-        RC insert(const Attribute &attr, const void *key,const Rid &rid, IXFileHandle &fileHandle, IndexDataEntry &newIndexDataEntry, unsigned pageNum);
+        RC insert(const Attribute &attr, const void *key, const Rid &rid, IXFileHandle &fileHandle, IndexDataEntry &newIndexDataEntry, unsigned pageNum);
         unsigned getRootPage(IXFileHandle &fileHandle);
         bool isNonLeaf(void *pageData);
         unsigned getChildPageNum(void *pageData, const void *key, const Attribute &attr);
-        RC insertInternal(void *pageData, unsigned pageNum, IndexDataEntry &newIndexDataEntry);
+        RC insertInInternal(void *pageData, unsigned pageNum, IndexDataEntry &newIndexDataEntry);
         RC insertInLeaf(const Attribute &attr, const void *key, const RID &rid, void *pageData);
         RC splitLeaf(void *pageData, IndexDataEntry &newIndexDataEntry);
         RC splitInternal(void *pageData, IndexDataEntry &newIndexDataEntry);
+        RC compareKey(void *pageData, const void *key, const Attribute &attr, unsigned offset);
 };
 
 
