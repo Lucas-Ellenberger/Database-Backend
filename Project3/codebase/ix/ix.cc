@@ -133,6 +133,7 @@ RC IndexManager::insertEntry(IXFileHandle &ixfileHandle, const Attribute &attrib
     // First create data entry to be inserted
     IndexDataEntry newDataEntry;
     unsigned rootPageNum = getRootPage(ixfileHandle); 
+
     return insert(attribute, key, rid, ixfileHandle, newDataEntry, rootPageNum); // Will recursively walk down tree until it finds leaf page to insert
 }
 
