@@ -18,6 +18,10 @@
 # define IX_LEAF_SPLIT      19
 # define IX_INTERNAL_SPLIT  20
 # define IX_EXISTING_ENTRY  21
+# define IX_FILE_DN_EXIST   22
+# define IX_HANDLE_IN_USE   23
+# define IX_FILE_EXISTS     24
+# define IX_REMOVE_FAILED   25
 
 # define IX_EOF (-1)  // end of the index scan
 
@@ -87,7 +91,7 @@ class IndexManager {
 
     private:
         static IndexManager *_index_manager;
-        static PagedFileManager *_pf_manager;
+        
         void newHeaderPage(void* pageData);
         void setMetaDataHeader(void *pageData, MetaDataHeader metaHeader);
         MetaDataHeader getMetaDataHeader(void *pageData);
@@ -107,6 +111,8 @@ class IndexManager {
         RC splitLeaf(void *pageData, IndexDataEntry &newIndexDataEntry);
         RC splitInternal(void *pageData, IndexDataEntry &newIndexDataEntry);
         RC compareKey(void *pageData, const void *key, const Attribute &attr, unsigned offset);
+
+        bool IndexManager::fileExists(const string &fileName)
 };
 
 
@@ -142,8 +148,20 @@ class IXFileHandle {
     // Destructor
     ~IXFileHandle();
 
+
+    RC readPage(PageNum pageNum, void *data);                           // Get a specific page
+    RC writePage(PageNum pageNum, const void *data);                    // Write a specific page
+    RC appendPage(const void *data);                                    // Append a specific page
+    unsigned getNumberOfPages();                                        // Get the number of pages in the file
 	// Put the current counter values of associated PF FileHandles into variables
 	RC collectCounterValues(unsigned &readPageCount, unsigned &writePageCount, unsigned &appendPageCount);
+
+    private:
+    FILE *_fd;
+
+    // Private helper methods
+    void setfd(FILE *fd);
+    FILE *getfd();
 
 };
 

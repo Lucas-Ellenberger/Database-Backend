@@ -32,9 +32,20 @@ IndexManager::~IndexManager()
 
 RC IndexManager::createFile(const string &fileName)
 {
-    // Creating a new paged file.
-    if (_pf_manager->createFile(fileName))
-        return IX_CREATE_FAILED;
+    // // Creating a new paged file.
+    // if (_pf_manager->createFile(fileName))
+    //     return IX_CREATE_FAILED;
+
+    if (fileExists(fileName))
+        return IX_FILE_EXISTS;
+
+    // Attempt to open the file for writing
+    FILE *pFile = fopen(fileName.c_str(), "wb");
+    // Return an error if we fail
+    if (pFile == NULL)
+        return IX_OPEN_FAILED;
+
+    //-------------------------
 
     // Setting up the header page.
     void * headerPageData = calloc(PAGE_SIZE, 1);
@@ -45,14 +56,14 @@ RC IndexManager::createFile(const string &fileName)
     newHeaderPage(headerPageData);
 
     // Adds the meta data page.
-    FileHandle handle;
-    if (_pf_manager->openFile(fileName.c_str(), handle))
-        return IX_OPEN_FAILED;
+    // FileHandle handle;
+    // if (_pf_manager->openFile(fileName.c_str(), handle))
+    //     return IX_OPEN_FAILED;
 
     if (handle.appendPage(headerPageData))
         return IX_APPEND_FAILED;
 
-    _pf_manager->closeFile(handle);
+    // _pf_manager->closeFile(handle);
     free(headerPageData);
 
     void * firstInternalPageData = calloc(PAGE_SIZE, 1);
@@ -65,7 +76,7 @@ RC IndexManager::createFile(const string &fileName)
     if (handle.appendPage(firstInternalPageData))
         return IX_APPEND_FAILED;
 
-    _pf_manager->closeFile(handle);
+    fclose (pFile);
     free(firstInternalPageData);
 
     return SUCCESS;
@@ -73,17 +84,49 @@ RC IndexManager::createFile(const string &fileName)
 
 RC IndexManager::destroyFile(const string &fileName)
 {
-    return _pf_manager->destroyFile(fileName);
+    // If file cannot be successfully removed, error
+    if (remove(fileName.c_str()) != 0)
+        return IX_REMOVE_FAILED;
+
+    return SUCCESS;
 }
 
 RC IndexManager::openFile(const string &fileName, IXFileHandle &ixfileHandle)
 {
-    return _pf_manager->openFile(fileName.c_str(), ixfileHandle);
+    // If this handle already has an open file, error
+    if (ixfileHandle.getfd() != NULL)
+        return IX_HANDLE_IN_USE;
+
+    // If the file doesn't exist, error
+    if (!fileExists(fileName.c_str()))
+        return IX_FILE_DN_EXIST;
+
+    // Open the file for reading/writing in binary mode
+    FILE *pFile;
+    pFile = fopen(fileName.c_str(), "rb+");
+    // If we fail, error
+    if (pFile == NULL)
+        return IX_OPEN_FAILED;
+
+    ixfileHandle.setfd(pFile);
+
+    return SUCCESS;
 }
 
 RC IndexManager::closeFile(IXFileHandle &ixfileHandle)
 {
-    return _pf_manager->closeFile(ixfileHandle);
+    FILE *pFile = ixfileHandle.getfd();
+
+    // If not an open file, error
+    if (pFile == NULL)
+        return 1;
+
+    // Flush and close the file
+    fclose(pFile);
+
+    fileHandle.setfd(NULL);
+
+    return SUCCESS;
 }
 
 RC IndexManager::insertEntry(IXFileHandle &ixfileHandle, const Attribute &attribute, const void *key, const RID &rid)
@@ -398,4 +441,71 @@ RC IndexManager::compareKey(void *pageData, const void *key, const Attribute &at
         }
     }
     return -2; // If we are thrown an unhandled attribute type
+}
+
+
+
+
+
+
+
+
+
+
+
+
+bool IndexManager::fileExists(const string &fileName)
+{
+    // If stat fails, we can safely assume the file doesn't exist
+    struct stat sb;
+    return stat(fileName.c_str(), &sb) == 0;
+}
+
+void IXFileHandle::setfd(FILE *fd)
+{
+    _fd = fd;
+}
+
+FILE *IXFileHandle::getfd()
+{
+    return _fd;
+}
+
+RC IXFileHandle::writePage(PageNum pageNum, const void *data)
+{
+    // Check if the page exists
+    if (getNumberOfPages() < pageNum)
+        return FH_PAGE_DN_EXIST;
+
+    // Seek to the start of the page
+    if (fseek(_fd, PAGE_SIZE * pageNum, SEEK_SET))
+        return FH_SEEK_FAILED;
+
+    // Write the page
+    if (fwrite(data, 1, PAGE_SIZE, _fd) == PAGE_SIZE)
+    {
+        // Immediately commit changes to disk
+        fflush(_fd);
+        writePageCounter++;
+        return SUCCESS;
+    }
+    
+    return FH_WRITE_FAILED;
+}
+
+
+RC IXFileHandle::appendPage(const void *data)
+{
+    // Seek to the end of the file
+    if (fseek(_fd, 0, SEEK_END))
+        return FH_SEEK_FAILED;
+
+    // Write the new page
+    if (fwrite(data, 1, PAGE_SIZE, _fd) == PAGE_SIZE)
+    {
+        fflush(_fd);
+        appendPageCounter++;
+        return SUCCESS;
+    }
+    return FH_WRITE_FAILED;
 }
