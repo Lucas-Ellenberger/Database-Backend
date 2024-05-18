@@ -22,8 +22,6 @@ IndexManager* IndexManager::instance()
 
 IndexManager::IndexManager()
 {
-    // Initialize the internal IndexManager instance.
-    _pf_manager = PagedFileManager::instance();
 }
 
 IndexManager::~IndexManager()
@@ -60,7 +58,8 @@ RC IndexManager::createFile(const string &fileName)
     // if (_pf_manager->openFile(fileName.c_str(), handle))
     //     return IX_OPEN_FAILED;
 
-    if (handle.appendPage(headerPageData))
+    IXFileHandle ixfileHandle;
+    if (ixfileHandle.appendPage(headerPageData))
         return IX_APPEND_FAILED;
 
     // _pf_manager->closeFile(handle);
@@ -73,7 +72,7 @@ RC IndexManager::createFile(const string &fileName)
     // TODO: Implement helper function.
     newInternalPage(firstInternalPageData, -1/* leftChildPageNum */);
 
-    if (handle.appendPage(firstInternalPageData))
+    if (ixfileHandle.appendPage(firstInternalPageData))
         return IX_APPEND_FAILED;
 
     fclose (pFile);
@@ -124,7 +123,7 @@ RC IndexManager::closeFile(IXFileHandle &ixfileHandle)
     // Flush and close the file
     fclose(pFile);
 
-    fileHandle.setfd(NULL);
+    ixfileHandle.setfd(NULL);
 
     return SUCCESS;
 }
@@ -133,9 +132,6 @@ RC IndexManager::insertEntry(IXFileHandle &ixfileHandle, const Attribute &attrib
 {  
     // First create data entry to be inserted
     IndexDataEntry newDataEntry;
-    newDataEntry.key = NULL; 
-    newDataEntry.rid;
-
     unsigned rootPageNum = getRootPage(ixfileHandle); 
 
     return insert(attribute, key, rid, ixfileHandle, newDataEntry, rootPageNum); // Will recursively walk down tree until it finds leaf page to insert
@@ -295,7 +291,7 @@ unsigned IndexManager::getPageFreeSpaceSize(void *pageData)
     return indexHeader.freeSpaceOffset - (indexHeader.dataEntryNumber * sizeof(IndexDataEntry) - sizeof(IndexHeader));
 }
 
-RC IndexManager::insert(const Attribute &attr, const void *key, const Rid &rid, IXFileHandle &fileHandle, IndexDataEntry &newIndexDataEntry, unsigned pageNum){
+RC IndexManager::insert(const Attribute &attr, const void *key, const RID &rid, IXFileHandle &fileHandle, IndexDataEntry &newIndexDataEntry, unsigned pageNum){
     void *pageData = malloc(PAGE_SIZE);
 
     if (fileHandle.readPage(pageNum, pageData) != SUCCESS){ // Assuming that IXFileHandle has identical methods as other FileHandle class
@@ -343,7 +339,7 @@ unsigned IndexManager::getRootPage(IXFileHandle &fileHandle){
 
 bool IndexManager::isNonLeaf(void *pageData){
     IndexHeader header = getIndexHeader(pageData);
-    return !header.leaf // Will return true of it is a non-leaf page
+    return !header.leaf; // Will return true of it is a non-leaf page
 }
 
 unsigned IndexManager::getChildPageNum(void *pageData, const void *key, const Attribute &attr){
@@ -357,7 +353,6 @@ unsigned IndexManager::getChildPageNum(void *pageData, const void *key, const At
         // Accesses current entry to grab update child page later
         IndexDataEntry entry;
         memcpy(&entry, (char*)pageData + entryOffset, sizeof(IndexDataEntry));
-
     
         int result = compareKey(pageData, key, attr, entryOffset);
         if (result == -1) { // If the provided key is less than the current entry's key, return the last child page number encountered
@@ -370,24 +365,29 @@ unsigned IndexManager::getChildPageNum(void *pageData, const void *key, const At
 
         lastChildPage = entry.rid.pageNum;
     }
+
     // If the key is greater than all the keys in the entries, return the last child page number
     return lastChildPage;
 }
 
 RC IndexManager::insertInInternal(void *pageData, unsigned pageNum, IndexDataEntry &newIndexDataEntry){
     // Should attempt to place internal "traffic cop" within page. If successful, set key within data entry to null 
+    return -1;
 }
 
 RC IndexManager::splitInternal(void*pageData, IndexDataEntry &newIndexDataEntry){
     // Should split internal page into two
+    return -1;
 }
 
 RC IndexManager::insertInLeaf(const Attribute &attr, const void *key, const RID &rid, void *pageData){
     // Should return SUCCESS if new data entry is inserted into leaf page. If page is full, return IX_INSERT_SPLIT 
+    return -1;
 }
 
 RC IndexManager::splitLeaf(void *pageData, IndexDataEntry &newIndexDataEntry){
     // Should split leaf into two, insert the newIndexDataEntry, and pass middle key value back in struct to signify split.
+    return -1;
 }
 
 RC IndexManager::compareKey(void *pageData, const void *key, const Attribute &attr, unsigned offset){
@@ -403,6 +403,7 @@ RC IndexManager::compareKey(void *pageData, const void *key, const Attribute &at
             if (searchKey > entryKey) return 1; 
             return 0; // Returns 0 when keys match, shouldn't happen
         }
+
         case TypeReal: {
             float entryKey;
             memcpy(&entryKey, (char*)pageData + offset, sizeof(REAL_SIZE));
@@ -414,6 +415,7 @@ RC IndexManager::compareKey(void *pageData, const void *key, const Attribute &at
             if (searchKey > entryKey) return 1; 
             return 0; // Returns 0 when keys match, shouldn't happen
         }
+
         case TypeVarChar: {
             // Get position of local varchar
             int localVarcharOffset;
@@ -440,19 +442,9 @@ RC IndexManager::compareKey(void *pageData, const void *key, const Attribute &at
             return (result < 0) ? -1 : (result > 0) ? 1 : 0; // Limit return to -1,0,1 so we can send error code for unhandled attribute type
         }
     }
+
     return -2; // If we are thrown an unhandled attribute type
 }
-
-
-
-
-
-
-
-
-
-
-
 
 bool IndexManager::fileExists(const string &fileName)
 {
@@ -486,13 +478,12 @@ RC IXFileHandle::writePage(PageNum pageNum, const void *data)
     {
         // Immediately commit changes to disk
         fflush(_fd);
-        writePageCounter++;
+        ixWritePageCounter++;
         return SUCCESS;
     }
     
     return FH_WRITE_FAILED;
 }
-
 
 RC IXFileHandle::appendPage(const void *data)
 {
@@ -504,8 +495,9 @@ RC IXFileHandle::appendPage(const void *data)
     if (fwrite(data, 1, PAGE_SIZE, _fd) == PAGE_SIZE)
     {
         fflush(_fd);
-        appendPageCounter++;
+        ixAppendPageCounter++;
         return SUCCESS;
     }
+
     return FH_WRITE_FAILED;
 }

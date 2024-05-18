@@ -102,7 +102,7 @@ class IndexManager {
         void setIndexDataEntry(void *pageData, unsigned indexEntryNumber, IndexDataEntry dataEntry);
         IndexDataEntry getIndexDataEntry(void *pageData, unsigned indexEntryNumber);
         unsigned getPageFreeSpaceSize(void *pageData);
-        RC insert(const Attribute &attr, const void *key, const Rid &rid, IXFileHandle &fileHandle, IndexDataEntry &newIndexDataEntry, unsigned pageNum);
+        RC insert(const Attribute &attr, const void *key, const RID &rid, IXFileHandle &fileHandle, IndexDataEntry &newIndexDataEntry, unsigned pageNum);
         unsigned getRootPage(IXFileHandle &fileHandle);
         bool isNonLeaf(void *pageData);
         unsigned getChildPageNum(void *pageData, const void *key, const Attribute &attr);
@@ -111,8 +111,7 @@ class IndexManager {
         RC splitLeaf(void *pageData, IndexDataEntry &newIndexDataEntry);
         RC splitInternal(void *pageData, IndexDataEntry &newIndexDataEntry);
         RC compareKey(void *pageData, const void *key, const Attribute &attr, unsigned offset);
-
-        bool IndexManager::fileExists(const string &fileName)
+        bool fileExists(const string &fileName);
 };
 
 
