@@ -6,6 +6,8 @@
 #include <iomanip>
 #include <iostream>
 #include <string>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 #include "ix.h"
 
@@ -463,6 +465,24 @@ FILE *IXFileHandle::getfd()
     return _fd;
 }
 
+RC IXFileHandle::readPage(PageNum pageNum, void *data)
+{
+    // If pageNum doesn't exist, error
+    if (getNumberOfPages() < pageNum)
+        return FH_PAGE_DN_EXIST;
+
+    // Try to seek to the specified page
+    if (fseek(_fd, PAGE_SIZE * pageNum, SEEK_SET))
+        return FH_SEEK_FAILED;
+
+    // Try to read the specified page
+    if (fread(data, 1, PAGE_SIZE, _fd) != PAGE_SIZE)
+        return FH_READ_FAILED;
+
+    ixReadPageCounter++;
+    return SUCCESS;
+}
+
 RC IXFileHandle::writePage(PageNum pageNum, const void *data)
 {
     // Check if the page exists
@@ -500,4 +520,15 @@ RC IXFileHandle::appendPage(const void *data)
     }
 
     return FH_WRITE_FAILED;
+}
+
+unsigned IXFileHandle::getNumberOfPages()
+{
+    // Use stat to get the file size
+    struct stat sb;
+    if (fstat(fileno(_fd), &sb) != 0)
+        // On error, return 0
+        return 0;
+    // Filesize is always PAGE_SIZE * number of pages
+    return sb.st_size / PAGE_SIZE;
 }
