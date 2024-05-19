@@ -38,11 +38,16 @@ RC IndexManager::createFile(const string &fileName)
     if (fileExists(fileName))
         return IX_FILE_EXISTS;
 
+    FILE *pFile = fopen(fileName.c_str(), "wb");
+    if (pFile == NULL)
+        return IX_CREATE_FAILED;
+    fclose(pFile);
+
     IXFileHandle ixfileHandle;
     if (openFile(fileName, ixfileHandle) != SUCCESS) {
         return IX_CREATE_FAILED;
     }
-
+    cerr << "got here" << endl;
     // Setting up the header page.
     void * headerPageData = calloc(PAGE_SIZE, 1);
     if (headerPageData == NULL)

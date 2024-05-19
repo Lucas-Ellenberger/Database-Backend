@@ -160,7 +160,7 @@ class IXFileHandle {
 
     friend class IndexManager;
     private:
-    FILE *_fd;
+    FILE *_fd = NULL;
 
     // Private helper methods
     void setfd(FILE *fd);
