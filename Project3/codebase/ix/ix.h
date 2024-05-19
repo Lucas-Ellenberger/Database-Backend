@@ -112,6 +112,9 @@ class IndexManager {
         RC splitInternal(void *pageData, IndexDataEntry &newIndexDataEntry);
         RC compareKey(void *pageData, const void *key, const Attribute &attr, unsigned offset);
         bool fileExists(const string &fileName);
+
+        RC findOptimalPage(const Attribute &attr, const void* key, IXFileHandle &fileHandle);
+        RC optimalPageHelper(const Attribute &attr, const void* key, IXFileHandle &fileHandle, uint32_t pageNum);
 };
 
 
