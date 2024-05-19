@@ -80,7 +80,7 @@ RC IndexManager::createFile(const string &fileName)
         return IX_MALLOC_FAILED;
 
     newLeafPage(firstLeafPage, 0, 0);
-    if (ixfileHandle.appendPage(newLeafPage))
+    if (ixfileHandle.appendPage(firstLeafPage))
         return IX_APPEND_FAILED;
     
     /*
@@ -88,7 +88,7 @@ RC IndexManager::createFile(const string &fileName)
     */
 
 
-    fclose (pFile);
+    closeFile(ixfileHandle);
     return SUCCESS;
 }
 
@@ -443,7 +443,48 @@ RC IndexManager::findOptimalPage(const Attribute &attr, const void* key, IXFileH
     IndexDataEntry entry;
 
     
-    if (attr.type == TypeVarChar) {
+    switch (attr.type) {
+    case TypeInt:
+        int32_t key_val_int;
+        memcpy(&key_val_int, key, 4);
+        for (uint32_t i = 0; i < header.dataEntryNumber; i += 1) {
+            entry = getIndexDataEntry(cur, i);
+            if (key_val_int < entry.key) {
+                if (i == 0) {
+                    return optimalPageHelper(attr, key, fileHandle, header.leftChildPageNum);
+                }
+                else {
+                    IndexDataEntry correct_entry = getIndexDataEntry(cur, i - 1);
+                    return optimalPageHelper(attr, key, fileHandle, correct_entry.rid.pageNum);
+                }
+                
+            }
+            else if (key_val_int == entry.key) {
+                return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);
+            }
+        }
+        return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);// break;
+    case TypeReal:
+        float key_val;
+        memcpy(&key_val, key, 4);
+        for (uint32_t i = 0; i < header.dataEntryNumber; i += 1) {
+            entry = getIndexDataEntry(cur, i);
+            if (key_val < entry.key) {
+                if (i == 0) {
+                    return optimalPageHelper(attr, key, fileHandle, header.leftChildPageNum);
+                }
+                else {
+                    IndexDataEntry correct_entry = getIndexDataEntry(cur, i - 1);
+                    return optimalPageHelper(attr, key, fileHandle, correct_entry.rid.pageNum);
+                }
+                
+            }
+            else if (key_val == entry.key) {
+                return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);
+            }
+        }
+        return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);// break;
+    case TypeVarChar:
         for (uint32_t i = 0; i < header.dataEntryNumber; i += 1) {
             entry = getIndexDataEntry(cur, i);
             //get length of current varchar data entry
@@ -478,28 +519,7 @@ RC IndexManager::findOptimalPage(const Attribute &attr, const void* key, IXFileH
             }
         }
         // if we get here without having returned a value, then we return the final page entry thingy
-        return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);
-    }
-    else {
-        int32_t key_val;
-        memcpy(&key_val, key, 4);
-        for (uint32_t i = 0; i < header.dataEntryNumber; i += 1) {
-            entry = getIndexDataEntry(cur, i);
-            if (key_val < entry.key) {
-                if (i == 0) {
-                    return optimalPageHelper(attr, key, fileHandle, header.leftChildPageNum);
-                }
-                else {
-                    IndexDataEntry correct_entry = getIndexDataEntry(cur, i - 1);
-                    return optimalPageHelper(attr, key, fileHandle, correct_entry.rid.pageNum);
-                }
-                
-            }
-            else if (key_val == entry.key) {
-                return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);
-            }
-        }
-        return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);
+        return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);// break;
     }
     
 }
@@ -515,8 +535,49 @@ RC IndexManager::optimalPageHelper(const Attribute &attr, const void* key, IXFil
     
     
     IndexDataEntry entry;
-
-    if (attr.type == TypeVarChar) {
+    switch (attr.type) {
+    case TypeInt:
+        int32_t key_val_int;
+        memcpy(&key_val_int, key, 4);
+        for (uint32_t i = 0; i < header.dataEntryNumber; i += 1) {
+            entry = getIndexDataEntry(cur, i);
+            if (key_val_int < entry.key) {
+                if (i == 0) {
+                    return optimalPageHelper(attr, key, fileHandle, header.leftChildPageNum);
+                }
+                else {
+                    IndexDataEntry correct_entry = getIndexDataEntry(cur, i - 1);
+                    return optimalPageHelper(attr, key, fileHandle, correct_entry.rid.pageNum);
+                }
+                
+            }
+            else if (key_val_int == entry.key) {
+                return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);
+            }
+        }
+        return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);
+        break;
+    case TypeReal:
+        float key_val;
+        memcpy(&key_val, key, 4);
+        for (uint32_t i = 0; i < header.dataEntryNumber; i += 1) {
+            entry = getIndexDataEntry(cur, i);
+            if (key_val < entry.key) {
+                if (i == 0) {
+                    return optimalPageHelper(attr, key, fileHandle, header.leftChildPageNum);
+                }
+                else {
+                    IndexDataEntry correct_entry = getIndexDataEntry(cur, i - 1);
+                    return optimalPageHelper(attr, key, fileHandle, correct_entry.rid.pageNum);
+                }
+                
+            }
+            else if (key_val == entry.key) {
+                return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);
+            }
+        }
+        return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);// break;
+    case TypeVarChar:
         for (uint32_t i = 0; i < header.dataEntryNumber; i += 1) {
             entry = getIndexDataEntry(cur, i);
             //get length of current varchar data entry
@@ -551,31 +612,69 @@ RC IndexManager::optimalPageHelper(const Attribute &attr, const void* key, IXFil
             }
         }
         // if we get here without having returned a value, then we return the final page entry thingy
-        return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);
+        return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);// break;
     }
-    else {
-        // NEED TO CREATE FLOAT CASE
 
-        int32_t key_val;
-        memcpy(&key_val, key, 4);
-        for (uint32_t i = 0; i < header.dataEntryNumber; i += 1) {
-            entry = getIndexDataEntry(cur, i);
-            if (key_val < entry.key) {
-                if (i == 0) {
-                    return optimalPageHelper(attr, key, fileHandle, header.leftChildPageNum);
-                }
-                else {
-                    IndexDataEntry correct_entry = getIndexDataEntry(cur, i - 1);
-                    return optimalPageHelper(attr, key, fileHandle, correct_entry.rid.pageNum);
-                }
+    // if (attr.type == TypeVarChar) {
+    //     for (uint32_t i = 0; i < header.dataEntryNumber; i += 1) {
+    //         entry = getIndexDataEntry(cur, i);
+    //         //get length of current varchar data entry
+    //         uint32_t length;
+    //         memcpy(&length, (char*)cur + entry.key, VARCHAR_LENGTH_SIZE);
+    //         //read varchar into buffer
+    //         char* buf = (char*)malloc(length + 1);
+    //         memcpy(buf, (char*)cur + entry.key + VARCHAR_LENGTH_SIZE, length);
+    //         buf[length] = '\0';
+
+    //         //get their varchar key and null terminate it
+    //         uint32_t key_length;
+    //         memcpy(&key_length, key, VARCHAR_LENGTH_SIZE);
+    //         char* key_buf = (char*)malloc(key_length + 1);
+    //         memcpy(key_buf, key + VARCHAR_LENGTH_SIZE, key_length);
+    //         key_buf[key_length] = '\0';
+
+
+    //         int cmp = strcmp(key_buf, buf);
+    //         if (cmp < 0) {
+    //             // key is less than what current index entry is, meaning we need to look at previous page
+    //             if (i == 0) {
+    //                 return optimalPageHelper(attr, key, fileHandle, header.leftChildPageNum);
+    //             }
+    //             else {
+    //                 IndexDataEntry correct_entry = getIndexDataEntry(cur, i - 1);
+    //                 return optimalPageHelper(attr, key, fileHandle, correct_entry.rid.pageNum);
+    //             }
+    //         }
+    //         if (cmp == 0) {
+    //             return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);
+    //         }
+    //     }
+    //     // if we get here without having returned a value, then we return the final page entry thingy
+    //     return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);
+    // }
+    // else {
+    //     // NEED TO CREATE FLOAT CASE
+
+    //     int32_t key_val;
+    //     memcpy(&key_val, key, 4);
+    //     for (uint32_t i = 0; i < header.dataEntryNumber; i += 1) {
+    //         entry = getIndexDataEntry(cur, i);
+    //         if (key_val < entry.key) {
+    //             if (i == 0) {
+    //                 return optimalPageHelper(attr, key, fileHandle, header.leftChildPageNum);
+    //             }
+    //             else {
+    //                 IndexDataEntry correct_entry = getIndexDataEntry(cur, i - 1);
+    //                 return optimalPageHelper(attr, key, fileHandle, correct_entry.rid.pageNum);
+    //             }
                 
-            }
-            else if (key_val == entry.key) {
-                return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);
-            }
-        }
-        return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);
-    }
+    //         }
+    //         else if (key_val == entry.key) {
+    //             return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);
+    //         }
+    //     }
+    //     return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);
+    // }
 }
 
 // RC IndexManager::readVarCharDataEntry(IXFileHandle &fileHandle, const void* pageData, const IndexDataEntry &dataEntry) {
