@@ -51,23 +51,17 @@ RC IndexManager::createFile(const string &fileName)
     // TODO: Implement helper function.
     newHeaderPage(headerPageData);
 
-    // Adds the meta data page.
-    // FileHandle handle;
-    // if (_pf_manager->openFile(fileName.c_str(), handle))
-    //     return IX_OPEN_FAILED;
-
-    
+    // Adds the header data page.
+    IXFileHandle ixfileHandle;
     if (ixfileHandle.appendPage(headerPageData))
         return IX_APPEND_FAILED;
 
-    // _pf_manager->closeFile(handle);
     free(headerPageData);
 
     void * firstInternalPageData = calloc(PAGE_SIZE, 1);
     if (firstInternalPageData == NULL)
         return IX_MALLOC_FAILED;
     
-    // TODO: Implement helper function.
     newInternalPage(firstInternalPageData, 2/* leftChildPageNum */);
 
     if (ixfileHandle.appendPage(firstInternalPageData))
@@ -417,6 +411,7 @@ RC IndexManager::insertInInternal(void *pageData, unsigned pageNum, IndexDataEnt
 
 RC IndexManager::splitInternal(void*pageData, IndexDataEntry &newIndexDataEntry){
     // Should split internal page into two
+    // TODO: Should be able to combine split functionality into one split function.
     return -1;
 }
 
@@ -426,7 +421,46 @@ RC IndexManager::insertInLeaf(const Attribute &attr, const void *key, const RID 
 }
 
 RC IndexManager::splitLeaf(void *pageData, IndexDataEntry &newIndexDataEntry){
+    // TODO: Need to know the variable type to know if we have varchars.
     // Should split leaf into two, insert the newIndexDataEntry, and pass middle key value back in struct to signify split.
+    IndexHeader indexHeader = getIndexHeader(pageData);
+    // Get half of the entries for the new page.
+    uint32_t numOldEntries = ceil(indexHeader.dataEntryNumber / 2);
+    uint32_t numNewEntries = floor(indexHeader.dataEntryNumber / 2);
+
+    void *newPageData = calloc(PAGE_SIZE, 1);
+    if (newPageData == NULL)
+        return IX_MALLOC_FAILED;
+    
+    // Prepare the new pages header.
+    IndexHeader newHeader;
+    newHeader.leaf = true;
+    newHeader.dataEntryNumber = numOldEntries;
+    // TODO: We need a way to tell split leaf the old page num, so we can update prevSiblingPageNum..
+    newHeader.prevSiblingPageNum = 0;
+    newHeader.nextSiblingPageNum = indexHeader.nextSiblingPageNum;
+    newHeader.leftChildPageNum = 0;
+    newHeader.freeSpaceOffset = PAGE_SIZE;
+    setIndexHeader(newPageData, newHeader);
+
+    // Copy over the data entries for the new page.
+    memcpy(
+            (char *)newPageData + sizeof(IndexHeader),
+            (char *)pageData + sizeof(IndexHeader) + (sizeof(IndexDataEntry) * numOldEntries),
+            (sizeof(IndexDataEntry) * numNewEntries)
+          );
+    // If varchar: call helper function to write in varchars at back of page.
+
+    // Update the old index header.
+    indexHeader.dataEntryNumber = numOldEntries;
+    // TODO: Need a way to pass the file number to know what the page number of the new page will be.
+    /* indexHeader.nextSiblingPageNum = ixfileHandle.getNumberOfPages; */
+    // TODO: Create a temp page, write in the index header and the first numOldEntries data entries.
+    // Then, check if we are varchar case and call helper function to put varchars at the back of the page.
+
+    // We will append the new page and write back the old page.
+    // Write to the struct the key of the first entry we split and put the page num of the new page in the RID.pageNum field.
+
     return -1;
 }
 
