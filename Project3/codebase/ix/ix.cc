@@ -35,17 +35,13 @@ RC IndexManager::createFile(const string &fileName)
     // // Creating a new paged file.
     // if (_pf_manager->createFile(fileName))
     //     return IX_CREATE_FAILED;
-
     if (fileExists(fileName))
         return IX_FILE_EXISTS;
 
-    // Attempt to open the file for writing
-    FILE *pFile = fopen(fileName.c_str(), "wb");
-    // Return an error if we fail
-    if (pFile == NULL)
-        return IX_OPEN_FAILED;
-
-    //-------------------------
+    IXFileHandle ixfileHandle;
+    if (openFile(fileName, ixfileHandle) != SUCCESS) {
+        return IX_CREATE_FAILED;
+    }
 
     // Setting up the header page.
     void * headerPageData = calloc(PAGE_SIZE, 1);
@@ -60,7 +56,7 @@ RC IndexManager::createFile(const string &fileName)
     // if (_pf_manager->openFile(fileName.c_str(), handle))
     //     return IX_OPEN_FAILED;
 
-    IXFileHandle ixfileHandle;
+    
     if (ixfileHandle.appendPage(headerPageData))
         return IX_APPEND_FAILED;
 
@@ -72,14 +68,27 @@ RC IndexManager::createFile(const string &fileName)
         return IX_MALLOC_FAILED;
     
     // TODO: Implement helper function.
-    newInternalPage(firstInternalPageData, -1/* leftChildPageNum */);
+    newInternalPage(firstInternalPageData, 2/* leftChildPageNum */);
 
     if (ixfileHandle.appendPage(firstInternalPageData))
         return IX_APPEND_FAILED;
 
-    fclose (pFile);
     free(firstInternalPageData);
 
+    void * firstLeafPage = calloc(PAGE_SIZE, 1);
+    if (firstLeafPage == NULL)
+        return IX_MALLOC_FAILED;
+
+    newLeafPage(firstLeafPage, 0, 0);
+    if (ixfileHandle.appendPage(newLeafPage))
+        return IX_APPEND_FAILED;
+    
+    /*
+    make first internal page point to first leaf page
+    */
+
+
+    fclose (pFile);
     return SUCCESS;
 }
 
@@ -155,6 +164,35 @@ RC IndexManager::scan(IXFileHandle &ixfileHandle,
 {
     return -1;
 }
+
+/*
+void spaces(int space) {
+    int counter = 0;
+    while(counter < space) {
+        fprintf(stderr, " ");
+        fflush(stderr);
+        counter += 1;
+    }
+}
+
+void printTree(Node *t, int depth) {
+    if (t) {
+        printTree(t->left, depth + 1);
+        spaces(4 * depth);
+        if (t->symbol != '$') {
+            if (isgraph(t->symbol)) {
+                fprintf(stderr, "'%c' (%" PRIu64 ")\n", t->symbol, t->frequency);
+            } else {
+                fprintf(stderr, "0x%02X (%" PRIu64 ")\n", t->symbol, t->frequency);
+            }
+        } else {
+            fprintf(stderr, "$ (%" PRIu64 ")\n", t->frequency);
+        }
+        printTree(t->right, depth + 1);
+    }
+    return;
+}
+*/
 
 void IndexManager::printBtree(IXFileHandle &ixfileHandle, const Attribute &attribute) const {
 }
@@ -391,6 +429,165 @@ RC IndexManager::splitLeaf(void *pageData, IndexDataEntry &newIndexDataEntry){
     // Should split leaf into two, insert the newIndexDataEntry, and pass middle key value back in struct to signify split.
     return -1;
 }
+
+// returns page number of first leaf page to look at for possible value 
+RC IndexManager::findOptimalPage(const Attribute &attr, const void* key, IXFileHandle &fileHandle) {
+    unsigned rootpage = getRootPage(fileHandle);
+    void* cur = calloc(PAGE_SIZE, 1);
+    fileHandle.readPage(rootpage, cur);
+
+    IndexHeader header = getIndexHeader(cur);
+    if (header.dataEntryNumber == 0)
+        return header.leftChildPageNum;
+    // otherwise there are entries and we need to start checking them
+    IndexDataEntry entry;
+
+    
+    if (attr.type == TypeVarChar) {
+        for (uint32_t i = 0; i < header.dataEntryNumber; i += 1) {
+            entry = getIndexDataEntry(cur, i);
+            //get length of current varchar data entry
+            uint32_t length;
+            memcpy(&length, (char*)cur + entry.key, VARCHAR_LENGTH_SIZE);
+            //read varchar into buffer
+            char* buf = (char*)malloc(length + 1);
+            memcpy(buf, (char*)cur + entry.key + VARCHAR_LENGTH_SIZE, length);
+            buf[length] = '\0';
+
+            //get their varchar key and null terminate it
+            uint32_t key_length;
+            memcpy(&key_length, key, VARCHAR_LENGTH_SIZE);
+            char* key_buf = (char*)malloc(key_length + 1);
+            memcpy(key_buf, key + VARCHAR_LENGTH_SIZE, key_length);
+            key_buf[key_length] = '\0';
+
+
+            int cmp = strcmp(key_buf, buf);
+            if (cmp < 0) {
+                // key is less than what current index entry is, meaning we need to look at previous page
+                if (i == 0) {
+                    return optimalPageHelper(attr, key, fileHandle, header.leftChildPageNum);
+                }
+                else {
+                    IndexDataEntry correct_entry = getIndexDataEntry(cur, i - 1);
+                    return optimalPageHelper(attr, key, fileHandle, correct_entry.rid.pageNum);
+                }
+            }
+            if (cmp == 0) {
+                return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);
+            }
+        }
+        // if we get here without having returned a value, then we return the final page entry thingy
+        return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);
+    }
+    else {
+        int32_t key_val;
+        memcpy(&key_val, key, 4);
+        for (uint32_t i = 0; i < header.dataEntryNumber; i += 1) {
+            entry = getIndexDataEntry(cur, i);
+            if (key_val < entry.key) {
+                if (i == 0) {
+                    return optimalPageHelper(attr, key, fileHandle, header.leftChildPageNum);
+                }
+                else {
+                    IndexDataEntry correct_entry = getIndexDataEntry(cur, i - 1);
+                    return optimalPageHelper(attr, key, fileHandle, correct_entry.rid.pageNum);
+                }
+                
+            }
+            else if (key_val == entry.key) {
+                return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);
+            }
+        }
+        return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);
+    }
+    
+}
+
+RC IndexManager::optimalPageHelper(const Attribute &attr, const void* key, IXFileHandle &fileHandle, uint32_t pageNum) {
+    void* cur = calloc(PAGE_SIZE, 1);
+    fileHandle.readPage(pageNum, cur);
+    IndexHeader header = getIndexHeader(cur);
+    if (header.leaf)
+        return pageNum;
+    if (header.dataEntryNumber == 0)
+        return header.leftChildPageNum;
+    
+    
+    IndexDataEntry entry;
+
+    if (attr.type == TypeVarChar) {
+        for (uint32_t i = 0; i < header.dataEntryNumber; i += 1) {
+            entry = getIndexDataEntry(cur, i);
+            //get length of current varchar data entry
+            uint32_t length;
+            memcpy(&length, (char*)cur + entry.key, VARCHAR_LENGTH_SIZE);
+            //read varchar into buffer
+            char* buf = (char*)malloc(length + 1);
+            memcpy(buf, (char*)cur + entry.key + VARCHAR_LENGTH_SIZE, length);
+            buf[length] = '\0';
+
+            //get their varchar key and null terminate it
+            uint32_t key_length;
+            memcpy(&key_length, key, VARCHAR_LENGTH_SIZE);
+            char* key_buf = (char*)malloc(key_length + 1);
+            memcpy(key_buf, key + VARCHAR_LENGTH_SIZE, key_length);
+            key_buf[key_length] = '\0';
+
+
+            int cmp = strcmp(key_buf, buf);
+            if (cmp < 0) {
+                // key is less than what current index entry is, meaning we need to look at previous page
+                if (i == 0) {
+                    return optimalPageHelper(attr, key, fileHandle, header.leftChildPageNum);
+                }
+                else {
+                    IndexDataEntry correct_entry = getIndexDataEntry(cur, i - 1);
+                    return optimalPageHelper(attr, key, fileHandle, correct_entry.rid.pageNum);
+                }
+            }
+            if (cmp == 0) {
+                return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);
+            }
+        }
+        // if we get here without having returned a value, then we return the final page entry thingy
+        return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);
+    }
+    else {
+        // NEED TO CREATE FLOAT CASE
+
+        int32_t key_val;
+        memcpy(&key_val, key, 4);
+        for (uint32_t i = 0; i < header.dataEntryNumber; i += 1) {
+            entry = getIndexDataEntry(cur, i);
+            if (key_val < entry.key) {
+                if (i == 0) {
+                    return optimalPageHelper(attr, key, fileHandle, header.leftChildPageNum);
+                }
+                else {
+                    IndexDataEntry correct_entry = getIndexDataEntry(cur, i - 1);
+                    return optimalPageHelper(attr, key, fileHandle, correct_entry.rid.pageNum);
+                }
+                
+            }
+            else if (key_val == entry.key) {
+                return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);
+            }
+        }
+        return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);
+    }
+}
+
+// RC IndexManager::readVarCharDataEntry(IXFileHandle &fileHandle, const void* pageData, const IndexDataEntry &dataEntry) {
+    
+//     uint32_t length;
+//     memcpy(&length, (char*)pageData + dataEntry.key, VARCHAR_LENGTH_SIZE);
+
+//     char* buf = (char*)malloc(length + 1);
+//     memcpy(buf, (char*)pageData + dataEntry.key + VARCHAR_LENGTH_SIZE, length);
+//     buf[length] = '\0';
+    
+// }
 
 RC IndexManager::compareKey(void *pageData, const void *key, const Attribute &attr, unsigned offset){
     switch(attr.type){
