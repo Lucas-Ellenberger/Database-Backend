@@ -93,7 +93,8 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
             // The field is a varchar.
             } else if (recordDescriptor[i].type == 2) {
                 short length = 0;
-                memcpy(&length, (char *)data + recordBytes, sizeof(int));
+                memcpy(&length, &(((char*)data)[recordBytes]), sizeof(int));
+                // memcpy(&length, (char *)data + recordBytes, sizeof(int));
                 recordBytes += sizeof(int);
                 recordBytes += length;
                 if (i == 0) {

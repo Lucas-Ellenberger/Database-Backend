@@ -133,11 +133,14 @@ class IndexManager {
                 const RID &rid, IXFileHandle &fileHandle);
         void newPageFromEntries(void *oldPageData, void *newPageData, uint32_t startEntry, uint32_t numEntries, bool isTypeVarChar);
 
-        RC compareKey(void *pageData, const void *key, const Attribute &attr, unsigned offset);
+        RC compareKey(void *pageData, const void *key, const Attribute &attr, IndexDataEntry &entry);
         bool fileExists(const string &fileName);
 
         RC findOptimalPage(const Attribute &attr, const void* key, IXFileHandle &fileHandle);
         RC optimalPageHelper(const Attribute &attr, const void* key, IXFileHandle &fileHandle, uint32_t pageNum);
+        void printTreeHelperInt(uint32_t pageNum, uint16_t level, IXFileHandle &ixfileHandle);
+        void printTreeHelperReal(uint32_t pageNum, uint16_t level, IXFileHandle &ixfileHandle);
+        void printTreeHelperVarChar(uint32_t pageNum, uint16_t level, IXFileHandle &ixfileHandle);
 };
 
 
@@ -182,7 +185,7 @@ class IXFileHandle {
 
     friend class IndexManager;
     private:
-    FILE *_fd;
+    FILE *_fd = NULL;
 
     // Private helper methods
     void setfd(FILE *fd);
