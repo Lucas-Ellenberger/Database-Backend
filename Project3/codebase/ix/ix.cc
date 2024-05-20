@@ -182,7 +182,85 @@ void printTree(Node *t, int depth) {
 */
 
 void IndexManager::printBtree(IXFileHandle &ixfileHandle, const Attribute &attribute) const {
+    unsigned rootPageNum = getRootPage(ixfileHandle);
+    // void *pageData = malloc(PAGE_SIZE);
+    // if (fileHandle.readPage(rootPageNum, pageData) != SUCCESS){ // Assumption that the meta page is on page 0 of the file
+    //     free(pageData);
+    //     return IX_READ_FAILED;
+    // }
+    // cout << "{" << endl;
+    switch(attribute.type) {
+        case TypeInt:
+            printTreeHelperInt(rootPageNum, 0, ixfileHandle);
+            break;
+        case TypeReal:
+            printTreeHelperReal(rootPageNum, 0, ixfileHandle);
+            break;
+        case TypeVarChar:
+            printTreeHelperVarChar(rootPageNum, 0, ixfileHandle);
+            break;
+    }
+    // printTreeHelper(rootPageNum, 0, ixfileHandle, attribute)
+
+    // cout << "}"<< endl;
+    // free(pageData);
 }
+
+void IndexManager::printTreeHelperInt(uint32_t pageNum, uint16_t level, IXFileHandle &ixfileHandle) {
+    // to do add spacing based on level
+    void *pageData = malloc(PAGE_SIZE);
+    if (ixfileHandle.readPage(pageNum, pageData) != SUCCESS){ // Assumption that the meta page is on page 0 of the file
+        free(pageData);
+        cerr << "printing tree read page failed." << endl;
+        return;
+    }
+    IndexHeader header = getIndexHeader(pageData);
+    if (header.leaf) {
+        // then no children
+        cout << "{";
+        cout << "\"keys\": [";
+
+        for (uint32_t i = 0; i < header.dataEntryNumber; i += 1) {
+            if (i != 0)
+                cout << ",";
+            IndexDataEntry curEntry = getIndexDataEntry(pageData, i);
+            cout << curEntry.key << ": [(" << curEntry.rid.pageNum << "," << curEntry.rid.slotNum << ")]";
+        }
+        cout << "}";
+
+
+    } 
+    else {
+        // with children
+        uint32_t* children_pages = (uint32_t*)calloc(header.dataEntryNumber + 1, sizeof(uint32_t));
+        children_pages[0] = header.leftChildPageNum;
+        cout << "{" << endl;
+        cout << "\"keys\": [";
+
+        for (uint32_t i = 0; i < header.dataEntryNumber; i += 1) {
+            if (i != 0)
+                cout << ",";
+            IndexDataEntry curEntry = getIndexDataEntry(pageData, i);
+            children_pages[i+1] = curEntry.rid.pageNum;
+            cout << curEntry.key;
+        }
+        cout << "]," << endl;
+        cout << "\"children\": [" << endl;
+        for (uint32_t i = 0; i < header.dataEntryNumber + 1; i += 1) {
+            if (i != 0)
+                cout << ",";
+            printTreeHelperInt(children_pages[i], level + 1, ixfileHandle);
+            cout << endl;
+        }
+        cout << "]}";
+    }
+    
+
+    free(pageData);
+}
+
+void IndexManager::printTreeHelperReal(uint32_t pageNum, uint16_t level, IXFileHandle &ixfileHandle) {}
+void IndexManager::printTreeHelperVarChar(uint32_t pageNum, uint16_t level, IXFileHandle &ixfileHandle) {}
 
 IX_ScanIterator::IX_ScanIterator()
 {
@@ -754,61 +832,119 @@ RC IndexManager::optimalPageHelper(const Attribute &attr, const void* key, IXFil
     
 // }
 
-RC IndexManager::compareKey(void *pageData, const void *key, const Attribute &attr, unsigned offset){
-    switch(attr.type){
-        case TypeInt: {
-            int entryKey;
-            memcpy(&entryKey, (char*)pageData + offset, sizeof(INT_SIZE));
+RC IndexManager::compareKey(void* pageData, const void* key, const Attribute &attr, IndexDataEntry &entry) {
+    switch(attr.type) {
+        case TypeInt:
+            int32_t key_val_int;
+            memcpy(&key_val_int, key, 4);
+            if (key_val_int < entry.key){
+                return -1;
+            }
+            else if (key_val_int > entry.key) {
+                return 1;
+            }
+            else {
+                return 0;
+            }
+            break;
+        case TypeReal:
+            float key_val;
+            memcpy(&key_val, key, 4);
+            if (key_val < entry.key){
+                return -1;
+            }
+            else if (key_val > entry.key) {
+                return 1;
+            }
+            else {
+                return 0;
+            }
+            break;
+        case TypeVarChar:
+            uint32_t length;
+            memcpy(&length, (char*)pageData + entry.key, VARCHAR_LENGTH_SIZE);
+            //read varchar into buffer
+            char* buf = (char*)malloc(length + 1);
+            memcpy(buf, (char*)pageData + entry.key + VARCHAR_LENGTH_SIZE, length);
+            buf[length] = '\0';
 
-            // Comparison of keys
-            int searchKey;
-            memcpy(&searchKey, key, sizeof(INT_SIZE));
-            if (searchKey < entryKey) return -1; 
-            if (searchKey > entryKey) return 1; 
-            return 0; // Returns 0 when keys match, shouldn't happen
-        }
+            //get their varchar key and null terminate it
+            uint32_t key_length;
+            memcpy(&key_length, key, VARCHAR_LENGTH_SIZE);
+            char* key_buf = (char*)malloc(key_length + 1);
+            memcpy(key_buf, key + VARCHAR_LENGTH_SIZE, key_length);
+            key_buf[key_length] = '\0';
 
-        case TypeReal: {
-            float entryKey;
-            memcpy(&entryKey, (char*)pageData + offset, sizeof(REAL_SIZE));
-        
-            // Comparison of keys
-            float searchKey;
-            memcpy(&searchKey, key, sizeof(REAL_SIZE));
-            if (searchKey < entryKey) return -1; 
-            if (searchKey > entryKey) return 1; 
-            return 0; // Returns 0 when keys match, shouldn't happen
-        }
-
-        case TypeVarChar: {
-            // Get position of local varchar
-            int localVarcharOffset;
-            memcpy(&localVarcharOffset, (char*)pageData + offset, sizeof(INT_SIZE));
-
-            // Access the varchar data using the offset
-            int localVarcharLength;
-            memcpy(&localVarcharLength, (char*)pageData + localVarcharOffset, sizeof(INT_SIZE));
-            char *localString = (char*)malloc(localVarcharLength + 1);
-            memcpy(localString, (char*)pageData + localVarcharOffset + sizeof(INT_SIZE), localVarcharLength);
-            localString[localVarcharLength] = '\0'; // Null terminate the local string
-
-            // Read the input varchar's length and data
-            int inputVarcharLength;
-            memcpy(&inputVarcharLength, key, sizeof(INT_SIZE));
-            char *inputString = (char*)malloc(inputVarcharLength + 1);
-            memcpy(inputString, (char*)key + sizeof(INT_SIZE), inputVarcharLength);
-            inputString[inputVarcharLength] = '\0'; // Null terminate the input string
-
-            // Compare the two strings
-            int result = strcmp(localString, inputString);
-            free(localString);
-            free(inputString);
-            return (result < 0) ? -1 : (result > 0) ? 1 : 0; // Limit return to -1,0,1 so we can send error code for unhandled attribute type
-        }
+            int cmp = strcmp(key_buf, buf);
+            if (cmp < 0) {
+                return -1;
+            }
+            else if (cmp > 0) {
+                return 1;
+            }
+            else {
+                return 0;
+            }
+            break;
     }
-
     return -2; // If we are thrown an unhandled attribute type
 }
+
+// RC IndexManager::compareKey(void *pageData, const void *key, const Attribute &attr, unsigned offset){
+//     switch(attr.type){
+//         case TypeInt: {
+//             int entryKey;
+//             memcpy(&entryKey, (char*)pageData + offset, sizeof(INT_SIZE));
+
+//             // Comparison of keys
+//             int searchKey;
+//             memcpy(&searchKey, key, sizeof(INT_SIZE));
+//             if (searchKey < entryKey) return -1; 
+//             if (searchKey > entryKey) return 1; 
+//             return 0; // Returns 0 when keys match, shouldn't happen
+//         }
+
+//         case TypeReal: {
+//             float entryKey;
+//             memcpy(&entryKey, (char*)pageData + offset, sizeof(REAL_SIZE));
+        
+//             // Comparison of keys
+//             float searchKey;
+//             memcpy(&searchKey, key, sizeof(REAL_SIZE));
+//             if (searchKey < entryKey) return -1; 
+//             if (searchKey > entryKey) return 1; 
+//             return 0; // Returns 0 when keys match, shouldn't happen
+//         }
+
+//         case TypeVarChar: {
+//             // Get position of local varchar
+//             int localVarcharOffset;
+//             memcpy(&localVarcharOffset, (char*)pageData + offset, sizeof(INT_SIZE));
+
+//             // Access the varchar data using the offset
+//             int localVarcharLength;
+//             memcpy(&localVarcharLength, (char*)pageData + localVarcharOffset, sizeof(INT_SIZE));
+//             char *localString = (char*)malloc(localVarcharLength + 1);
+//             memcpy(localString, (char*)pageData + localVarcharOffset + sizeof(INT_SIZE), localVarcharLength);
+//             localString[localVarcharLength] = '\0'; // Null terminate the local string
+
+//             // Read the input varchar's length and data
+//             int inputVarcharLength;
+//             memcpy(&inputVarcharLength, key, sizeof(INT_SIZE));
+//             char *inputString = (char*)malloc(inputVarcharLength + 1);
+//             memcpy(inputString, (char*)key + sizeof(INT_SIZE), inputVarcharLength);
+//             inputString[inputVarcharLength] = '\0'; // Null terminate the input string
+
+//             // Compare the two strings
+//             int result = strcmp(localString, inputString);
+//             free(localString);
+//             free(inputString);
+//             return (result < 0) ? -1 : (result > 0) ? 1 : 0; // Limit return to -1,0,1 so we can send error code for unhandled attribute type
+//         }
+//     }
+
+//     return -2; // If we are thrown an unhandled attribute type
+// }
 
 bool IndexManager::fileExists(const string &fileName)
 {
