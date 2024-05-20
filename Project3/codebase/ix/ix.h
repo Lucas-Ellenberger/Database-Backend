@@ -95,21 +95,32 @@ class IndexManager {
         void newHeaderPage(void* pageData);
         void setMetaDataHeader(void *pageData, MetaDataHeader metaHeader);
         MetaDataHeader getMetaDataHeader(void *pageData);
+
         void newInternalPage(void* pageData, int leftChildPageNum);
         void newLeafPage(void *pageData, int nextSiblingPageNum, int prevSiblingPageNum);
+
         void setIndexHeader(void *pageData, IndexHeader indexHeader);
         IndexHeader getIndexHeader(void *pageData);
+
         void setIndexDataEntry(void *pageData, unsigned indexEntryNumber, IndexDataEntry dataEntry);
         IndexDataEntry getIndexDataEntry(void *pageData, unsigned indexEntryNumber);
-        unsigned getPageFreeSpaceSize(void *pageData);
-        RC insert(const Attribute &attr, const void *key, const RID &rid, IXFileHandle &fileHandle, IndexDataEntry &newIndexDataEntry, unsigned pageNum);
+
         unsigned getRootPage(IXFileHandle &fileHandle);
-        bool isNonLeaf(void *pageData);
         unsigned getChildPageNum(void *pageData, const void *key, const Attribute &attr);
-        RC insertInInternal(void *pageData, unsigned pageNum, IndexDataEntry &newIndexDataEntry);
-        RC insertInLeaf(const Attribute &attr, const void *key, const RID &rid, void *pageData);
-        RC splitLeaf(void *pageData, IndexDataEntry &newIndexDataEntry);
-        RC splitInternal(void *pageData, IndexDataEntry &newIndexDataEntry);
+        bool isNonLeaf(void *pageData);
+        unsigned getPageFreeSpaceSize(void *pageData);
+
+        RC insert(const Attribute &attr, const void *key, const RID &rid, IXFileHandle &fileHandle,
+                IndexDataEntry &newIndexDataEntry, unsigned pageNum);
+        RC insertInInternal(void *pageData, const Attribute &attr, const void *key, IndexDataEntry &newIndexDataEntry);
+        RC insertInLeaf(void *pageData, const Attribute &attr, const void *key, const RID &rid);
+
+        RC splitLeaf(void *pageData, unsigned pageNum, const Attribute &attr, const void *key,
+                IXFileHandle &fileHandle, IndexDataEntry &newIndexDataEntry);
+        RC splitInternal(void *pageData, unsigned pageNum, const Attribute &attr, const void *key,
+                IXFileHandle &fileHandle, IndexDataEntry &newIndexDataEntry);
+        void newPageFromEntries(void *oldPageData, void *newPageData, uint32_t startEntry, uint32_t numEntries, bool isTypeVarChar);
+
         RC compareKey(void *pageData, const void *key, const Attribute &attr, unsigned offset);
         bool fileExists(const string &fileName);
 
