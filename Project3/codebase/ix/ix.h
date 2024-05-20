@@ -106,15 +106,15 @@ class IndexManager {
         unsigned getRootPage(IXFileHandle &fileHandle);
         bool isNonLeaf(void *pageData);
         unsigned getChildPageNum(void *pageData, const void *key, const Attribute &attr);
-        RC insertInInternal(void *pageData, unsigned pageNum, IndexDataEntry &newIndexDataEntry);
-        RC insertInLeaf(const Attribute &attr, const void *key, const RID &rid, void *pageData);
-        RC splitLeaf(void *pageData, IndexDataEntry &newIndexDataEntry);
-        RC splitInternal(void *pageData, IndexDataEntry &newIndexDataEntry);
+        RC insertInInternal(void *pageData, const Attribute &attr, const void *key, IndexDataEntry &newIndexDataEntry);
+        RC insertInLeaf(void *pageData, const Attribute &attr, const void *key, const RID &rid);
+        RC splitLeaf(void *pageData, unsigned pageNum, const Attribute &attr, const void *key, IXFileHandle &fileHandle, IndexDataEntry &newIndexDataEntry);
+        RC splitInternal(void *pageData, unsigned pageNum, const Attribute &attr, const void *key, IXFileHandle &fileHandle, IndexDataEntry &newIndexDataEntry);
         RC compareKey(void *pageData, const void *key, const Attribute &attr, unsigned offset);
         bool fileExists(const string &fileName);
-
         RC findOptimalPage(const Attribute &attr, const void* key, IXFileHandle &fileHandle);
         RC optimalPageHelper(const Attribute &attr, const void* key, IXFileHandle &fileHandle, uint32_t pageNum);
+        void newPageFromEntries(void *oldPageData, void *newPageData, uint32_t startEntry, uint32_t numEntries, bool isTypeVarChar);
 };
 
 

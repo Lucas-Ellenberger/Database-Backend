@@ -32,9 +32,6 @@ IndexManager::~IndexManager()
 
 RC IndexManager::createFile(const string &fileName)
 {
-    // // Creating a new paged file.
-    // if (_pf_manager->createFile(fileName))
-    //     return IX_CREATE_FAILED;
     if (fileExists(fileName))
         return IX_FILE_EXISTS;
 
@@ -48,11 +45,8 @@ RC IndexManager::createFile(const string &fileName)
     if (headerPageData == NULL)
         return IX_MALLOC_FAILED;
 
-    // TODO: Implement helper function.
     newHeaderPage(headerPageData);
-
     // Adds the header data page.
-    IXFileHandle ixfileHandle;
     if (ixfileHandle.appendPage(headerPageData))
         return IX_APPEND_FAILED;
 
@@ -62,8 +56,7 @@ RC IndexManager::createFile(const string &fileName)
     if (firstInternalPageData == NULL)
         return IX_MALLOC_FAILED;
     
-    newInternalPage(firstInternalPageData, 2/* leftChildPageNum */);
-
+    newInternalPage(firstInternalPageData, 2);
     if (ixfileHandle.appendPage(firstInternalPageData))
         return IX_APPEND_FAILED;
 
@@ -77,11 +70,6 @@ RC IndexManager::createFile(const string &fileName)
     if (ixfileHandle.appendPage(firstLeafPage))
         return IX_APPEND_FAILED;
     
-    /*
-    make first internal page point to first leaf page
-    */
-
-
     closeFile(ixfileHandle);
     return SUCCESS;
 }
@@ -322,12 +310,12 @@ IndexDataEntry IndexManager::getIndexDataEntry(void *pageData, unsigned indexEnt
 unsigned IndexManager::getPageFreeSpaceSize(void *pageData)
 {
     IndexHeader indexHeader = getIndexHeader(pageData);
-    return indexHeader.freeSpaceOffset - (indexHeader.dataEntryNumber * sizeof(IndexDataEntry) - sizeof(IndexHeader));
+    return indexHeader.freeSpaceOffset - (indexHeader.dataEntryNumber * sizeof(IndexDataEntry)) - sizeof(IndexHeader);
 }
 
-RC IndexManager::insert(const Attribute &attr, const void *key, const RID &rid, IXFileHandle &fileHandle, IndexDataEntry &newIndexDataEntry, unsigned pageNum){
+RC IndexManager::insert(const Attribute &attr, const void *key, const RID &rid, IXFileHandle &fileHandle, IndexDataEntry &newIndexDataEntry, unsigned pageNum)
+{
     void *pageData = malloc(PAGE_SIZE);
-
     if (fileHandle.readPage(pageNum, pageData) != SUCCESS){ // Assuming that IXFileHandle has identical methods as other FileHandle class
         free(pageData);
         return IX_READ_FAILED;
@@ -336,21 +324,34 @@ RC IndexManager::insert(const Attribute &attr, const void *key, const RID &rid, 
     // Checks if current page is a leaf or internal page
     if (isNonLeaf(pageData)){ // If internal page, get child page, and recursively call insert
         unsigned childPageNum = getChildPageNum(pageData, key, attr);
-        if (childPageNum == -2) return IX_EXISTING_ENTRY; 
-        if (childPageNum == -3) return IX_NO_SUCH_ATTR;
+        // getChildPageNum returns 0 on error.
+        if (childPageNum == 0)
+            return IX_EXISTING_ENTRY; 
+        /* if (childPageNum == -3) return IX_NO_SUCH_ATTR; */
         
         RC rc = insert(attr, key, rid, fileHandle, newIndexDataEntry, childPageNum); 
+        if (rc != SUCCESS)
+            return rc;
+
         if (newIndexDataEntry.key != NULL){
             rc = insertInInternal(pageData, pageNum, newIndexDataEntry); // This will be called at every backtrack level until we find space to insert 
             if (rc == IX_INTERNAL_SPLIT){
-                rc = splitInternal(pageData, newIndexDataEntry);
+                rc = splitInternal(pageData, pageNum, attr, fileHandle, newIndexDataEntry);
+                // TODO: Must insert newIndexDataEntry to internal page.
+                // Need a way to track the parent of the current page.
+                // Might want to keep a list of page nums we see on the call trace of getChildPageNum.
             }
         }
     } else { // If leaf page, attempt to insert data entry in leaf
         RC rc = insertInLeaf(attr, key, rid, pageData); // TO-DO: Should return 0 if successfully inserted, return IX_LEAF_SPLIT if split is needed 
+        if ((rc != SUCCESS) && (rc != IX_LEAF_SPLIT))
+            return rc;
+
         if (rc == IX_LEAF_SPLIT) {
-            rc = splitLeaf(pageData, newIndexDataEntry); // TO-DO: Should split leaf page into two, find in parent if needed.
+            rc = splitLeaf(pageData, pageNum, attr, fileHandle, newIndexDataEntry);
+            // TODO: Must insert newIndexDataEntry to internal page.
         }
+
         fileHandle.writePage(pageNum, pageData);
     }
 
@@ -389,13 +390,12 @@ unsigned IndexManager::getChildPageNum(void *pageData, const void *key, const At
         memcpy(&entry, (char*)pageData + entryOffset, sizeof(IndexDataEntry));
     
         int result = compareKey(pageData, key, attr, entryOffset);
-        if (result == -1) { // If the provided key is less than the current entry's key, return the last child page number encountered
+        if (result == -1) // If the provided key is less than the current entry's key, return the last child page number encountered
             return lastChildPage;
-        } else if (result == 0) {
-            return -2; // Returns -2 for duplicate data entry
-        } else if (result == -2){
-            return -3;// Returns -3 for unhandled attribute type
-        }
+
+        // compareKey returns 1 if we must keep searching.
+        if (result != 1)
+            return 0;
 
         lastChildPage = entry.rid.pageNum;
     }
@@ -404,63 +404,93 @@ unsigned IndexManager::getChildPageNum(void *pageData, const void *key, const At
     return lastChildPage;
 }
 
-RC IndexManager::insertInInternal(void *pageData, unsigned pageNum, IndexDataEntry &newIndexDataEntry){
+RC IndexManager::splitInternal(void *pageData, unsigned pageNum, const Attribute &attr, const void *key,
+        IXFileHandle &fileHandle, IndexDataEntry &newIndexDataEntry)
+{
     // Should attempt to place internal "traffic cop" within page. If successful, set key within data entry to null 
     return -1;
 }
 
-RC IndexManager::splitInternal(void*pageData, IndexDataEntry &newIndexDataEntry){
-    // Should split internal page into two
-    // TODO: Should be able to combine split functionality into one split function.
-    return -1;
-}
-
-RC IndexManager::insertInLeaf(const Attribute &attr, const void *key, const RID &rid, void *pageData){
+RC IndexManager::insertInLeaf(void *pageData, const Attribute &attr, const void *key, const RID &rid)
+{
     // Should return SUCCESS if new data entry is inserted into leaf page. If page is full, return IX_INSERT_SPLIT 
     return -1;
 }
 
-RC IndexManager::splitLeaf(void *pageData, IndexDataEntry &newIndexDataEntry){
-    // TODO: Need to know the variable type to know if we have varchars.
-    // Should split leaf into two, insert the newIndexDataEntry, and pass middle key value back in struct to signify split.
+RC IndexManager::splitLeaf(void *pageData, unsigned pageNum, const Attribute &attr, const void *key,
+        IXFileHandle &fileHandle, IndexDataEntry &newIndexDataEntry)
+{
+    bool varchar = false;
+    if (attr.type == TypeVarChar)
+        varchar = true;
+    // newIndexDataEntry has the information that must be inserted into one of the pages.
     IndexHeader indexHeader = getIndexHeader(pageData);
-    // Get half of the entries for the new page.
+    // Current page will keep half of the entries.
     uint32_t numOldEntries = ceil(indexHeader.dataEntryNumber / 2);
+    // Get half of the entries for the new page.
     uint32_t numNewEntries = floor(indexHeader.dataEntryNumber / 2);
 
     void *newPageData = calloc(PAGE_SIZE, 1);
     if (newPageData == NULL)
         return IX_MALLOC_FAILED;
     
+    // TODO: MUST Find which page should take newIndexDataEntry!!!
+    // Can use compare key with new key and middle key on page.
+    // Then, we can call insert on the split leaf page because we must have room.
+    unsigned offset = sizeof(IndexHeader) + (sizeof(IndexDataEntry) * numNewEntries);
+    RC value = compareKey(pageData, key, attr, offset);
+    bool newPageInsert;
+    if (value == -1) {
+        newPageInsert = false;
+    } else {
+        newPageInsert = true;
+    }
+
     // Prepare the new pages header.
     IndexHeader newHeader;
     newHeader.leaf = true;
-    newHeader.dataEntryNumber = numOldEntries;
-    // TODO: We need a way to tell split leaf the old page num, so we can update prevSiblingPageNum..
-    newHeader.prevSiblingPageNum = 0;
+    newHeader.dataEntryNumber = numNewEntries;
+    newHeader.prevSiblingPageNum = pageNum;
     newHeader.nextSiblingPageNum = indexHeader.nextSiblingPageNum;
     newHeader.leftChildPageNum = 0;
     newHeader.freeSpaceOffset = PAGE_SIZE;
     setIndexHeader(newPageData, newHeader);
+    newPageFromEntries(pageData, newPageData, numOldEntries, numNewEntries, varchar);
+    IndexDataEntry newDataEntry = getIndexDataEntry(pageData, 0);
 
     // Copy over the data entries for the new page.
-    memcpy(
-            (char *)newPageData + sizeof(IndexHeader),
-            (char *)pageData + sizeof(IndexHeader) + (sizeof(IndexDataEntry) * numOldEntries),
-            (sizeof(IndexDataEntry) * numNewEntries)
-          );
-    // If varchar: call helper function to write in varchars at back of page.
+    /* memcpy( */
+    /*         (char *)newPageData + sizeof(IndexHeader), */
+    /*         (char *)pageData + sizeof(IndexHeader) + (sizeof(IndexDataEntry) * numOldEntries), */
+    /*         (sizeof(IndexDataEntry) * numNewEntries) */
+    /*       ); */
 
     // Update the old index header.
     indexHeader.dataEntryNumber = numOldEntries;
-    // TODO: Need a way to pass the file number to know what the page number of the new page will be.
-    /* indexHeader.nextSiblingPageNum = ixfileHandle.getNumberOfPages; */
-    // TODO: Create a temp page, write in the index header and the first numOldEntries data entries.
-    // Then, check if we are varchar case and call helper function to put varchars at the back of the page.
+    indexHeader.nextSiblingPageNum = fileHandle.getNumberOfPages();
+    if (newPageInsert)
+        insertInLeaf(newPageData, attr, key, newIndexDataEntry);
 
-    // We will append the new page and write back the old page.
-    // Write to the struct the key of the first entry we split and put the page num of the new page in the RID.pageNum field.
+    fileHandle.appendPage(newPageData);
 
+    // Update the prevSiblingPageNum of the old nextSiblingPageNum.
+    memset(newPageData, 0, PAGE_SIZE);
+    fileHandle.readPage(newHeader.nextSiblingPageNum, newPageData);
+    IndexHeader siblingHeader = getIndexHeader(newPageData);
+    siblingHeader.prevSiblingPageNum = indexHeader.nextSiblingPageNum;
+    setIndexHeader(newPageData, siblingHeader);
+    fileHandle.writePage(newHeader.nextSiblingPageNum, newPageData);
+
+    // Restructure the current page data by writing the information into the temp page.
+    memset(newPageData, 0, PAGE_SIZE);
+    setIndexHeader(newPageData, indexHeader);
+    newPageFromEntries(pageData, newPageData, numOldEntries, numNewEntries, varchar);
+    if (!newPageInsert)
+        insertInLeaf(newPageData, attr, key, newIndexDataEntry);
+
+    fileHandle.writePage(pageNum, newPageData);
+
+    free(newPageData);
     return -1;
 }
 
@@ -475,7 +505,6 @@ RC IndexManager::findOptimalPage(const Attribute &attr, const void* key, IXFileH
         return header.leftChildPageNum;
     // otherwise there are entries and we need to start checking them
     IndexDataEntry entry;
-
     
     switch (attr.type) {
     case TypeInt:
@@ -555,7 +584,7 @@ RC IndexManager::findOptimalPage(const Attribute &attr, const void* key, IXFileH
         // if we get here without having returned a value, then we return the final page entry thingy
         return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);// break;
     }
-    
+    return -101;   
 }
 
 RC IndexManager::optimalPageHelper(const Attribute &attr, const void* key, IXFileHandle &fileHandle, uint32_t pageNum) {
@@ -648,6 +677,8 @@ RC IndexManager::optimalPageHelper(const Attribute &attr, const void* key, IXFil
         // if we get here without having returned a value, then we return the final page entry thingy
         return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);// break;
     }
+    return -99;
+}
 
     // if (attr.type == TypeVarChar) {
     //     for (uint32_t i = 0; i < header.dataEntryNumber; i += 1) {
@@ -709,7 +740,7 @@ RC IndexManager::optimalPageHelper(const Attribute &attr, const void* key, IXFil
     //     }
     //     return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);
     // }
-}
+/* } */
 
 // RC IndexManager::readVarCharDataEntry(IXFileHandle &fileHandle, const void* pageData, const IndexDataEntry &dataEntry) {
     
@@ -783,6 +814,11 @@ bool IndexManager::fileExists(const string &fileName)
     // If stat fails, we can safely assume the file doesn't exist
     struct stat sb;
     return stat(fileName.c_str(), &sb) == 0;
+}
+
+void IndexManager::newPageFromEntries(void *oldPageData, void *newPageData, uint32_t startEntry, uint32_t numEntries, bool isTypeVarChar)
+{
+    return;
 }
 
 void IXFileHandle::setfd(FILE *fd)
