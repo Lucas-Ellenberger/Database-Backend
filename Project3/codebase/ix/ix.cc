@@ -423,6 +423,7 @@ RC IndexManager::splitLeaf(void *pageData, unsigned pageNum, const Attribute &at
     bool varchar = false;
     if (attr.type == TypeVarChar)
         varchar = true;
+
     // newIndexDataEntry has the information that must be inserted into one of the pages.
     IndexHeader indexHeader = getIndexHeader(pageData);
     // Current page will keep half of the entries.
@@ -434,8 +435,7 @@ RC IndexManager::splitLeaf(void *pageData, unsigned pageNum, const Attribute &at
     if (newPageData == NULL)
         return IX_MALLOC_FAILED;
     
-    // TODO: MUST Find which page should take newIndexDataEntry!!!
-    // Can use compare key with new key and middle key on page.
+    // Must compare the new key with the first key on the new page..
     // Then, we can call insert on the split leaf page because we must have room.
     unsigned offset = sizeof(IndexHeader) + (sizeof(IndexDataEntry) * numNewEntries);
     RC value = compareKey(pageData, key, attr, offset);
@@ -454,16 +454,10 @@ RC IndexManager::splitLeaf(void *pageData, unsigned pageNum, const Attribute &at
     newHeader.nextSiblingPageNum = indexHeader.nextSiblingPageNum;
     newHeader.leftChildPageNum = 0;
     newHeader.freeSpaceOffset = PAGE_SIZE;
+
     setIndexHeader(newPageData, newHeader);
     newPageFromEntries(pageData, newPageData, numOldEntries, numNewEntries, varchar);
     IndexDataEntry newDataEntry = getIndexDataEntry(pageData, 0);
-
-    // Copy over the data entries for the new page.
-    /* memcpy( */
-    /*         (char *)newPageData + sizeof(IndexHeader), */
-    /*         (char *)pageData + sizeof(IndexHeader) + (sizeof(IndexDataEntry) * numOldEntries), */
-    /*         (sizeof(IndexDataEntry) * numNewEntries) */
-    /*       ); */
 
     // Update the old index header.
     indexHeader.dataEntryNumber = numOldEntries;
@@ -476,9 +470,11 @@ RC IndexManager::splitLeaf(void *pageData, unsigned pageNum, const Attribute &at
     // Update the prevSiblingPageNum of the old nextSiblingPageNum.
     memset(newPageData, 0, PAGE_SIZE);
     fileHandle.readPage(newHeader.nextSiblingPageNum, newPageData);
+
     IndexHeader siblingHeader = getIndexHeader(newPageData);
     siblingHeader.prevSiblingPageNum = indexHeader.nextSiblingPageNum;
     setIndexHeader(newPageData, siblingHeader);
+
     fileHandle.writePage(newHeader.nextSiblingPageNum, newPageData);
 
     // Restructure the current page data by writing the information into the temp page.
@@ -593,9 +589,9 @@ RC IndexManager::optimalPageHelper(const Attribute &attr, const void* key, IXFil
     IndexHeader header = getIndexHeader(cur);
     if (header.leaf)
         return pageNum;
+
     if (header.dataEntryNumber == 0)
         return header.leftChildPageNum;
-    
     
     IndexDataEntry entry;
     switch (attr.type) {
@@ -818,7 +814,35 @@ bool IndexManager::fileExists(const string &fileName)
 
 void IndexManager::newPageFromEntries(void *oldPageData, void *newPageData, uint32_t startEntry, uint32_t numEntries, bool isTypeVarChar)
 {
-    return;
+    memcpy(
+            (char *)newPageData + sizeof(IndexHeader),
+            (char *)oldPageData + sizeof(IndexHeader) + (startEntry * sizeof(IndexDataEntry)),
+            numEntries * sizeof(IndexDataEntry)
+          );
+
+    if (!isTypeVarChar)
+        return;
+
+    IndexDataEntry oldDataEntry;
+    IndexDataEntry newDataEntry;
+    int length;
+    int totalLength;
+    uint16_t freeSpaceOffset = PAGE_SIZE;
+    for (uint32_t i = 0; i < numEntries; i++) {
+        oldDataEntry = getIndexDataEntry(oldPageData, startEntry + i);
+        memcpy(&length, (char *)oldPageData + oldDataEntry.key, sizeof(int));
+        totalLength = sizeof(int) + length;
+        freeSpaceOffset -= totalLength;
+        memcpy(
+                (char *)newPageData + freeSpaceOffset,
+                (char *)oldPageData + oldDataEntry.key,
+                totalLength
+              );
+
+        newDataEntry = getIndexDataEntry(newPageData, i);
+        newDataEntry.key = freeSpaceOffset;
+        setIndexDataEntry(newPageData, i, newDataEntry);
+    }
 }
 
 void IXFileHandle::setfd(FILE *fd)
