@@ -419,19 +419,19 @@ RC IndexManager::insert(const Attribute &attr, const void *key, const RID &rid, 
         if (newIndexDataEntry.key != NULL){
             rc = insertInInternal(pageData, pageNum, newIndexDataEntry); // This will be called at every backtrack level until we find space to insert 
             if (rc == IX_INTERNAL_SPLIT){
-                rc = splitInternal(pageData, pageNum, attr, fileHandle, newIndexDataEntry);
+                SplitDataEntry splitEntry = splitInternal(pageData, pageNum, attr, key, fileHandle, newIndexDataEntry);
                 // TODO: Must insert newIndexDataEntry to internal page.
                 // Need a way to track the parent of the current page.
                 // Might want to keep a list of page nums we see on the call trace of getChildPageNum.
             }
         }
     } else { // If leaf page, attempt to insert data entry in leaf
-        RC rc = insertInLeaf(attr, key, rid, pageData); // TO-DO: Should return 0 if successfully inserted, return IX_LEAF_SPLIT if split is needed 
+        RC rc = insertInLeaf(attr, key, rid, pageData); // TODO: Should return 0 if successfully inserted, return IX_LEAF_SPLIT if split is needed 
         if ((rc != SUCCESS) && (rc != IX_LEAF_SPLIT))
             return rc;
 
         if (rc == IX_LEAF_SPLIT) {
-            rc = splitLeaf(pageData, pageNum, attr, fileHandle, newIndexDataEntry);
+            SplitDataEntry splitEntry = splitLeaf(pageData, pageNum, attr, key, fileHandle, newIndexDataEntry);
             // TODO: Must insert newIndexDataEntry to internal page.
         }
 
@@ -487,22 +487,10 @@ unsigned IndexManager::getChildPageNum(void *pageData, const void *key, const At
     return lastChildPage;
 }
 
-RC IndexManager::splitInternal(void *pageData, unsigned pageNum, const Attribute &attr, const void *key,
+SplitDataEntry IndexManager::splitInternal(void *pageData, unsigned pageNum, const Attribute &attr, const void *key,
         IXFileHandle &fileHandle, IndexDataEntry &newIndexDataEntry)
 {
     // Should attempt to place internal "traffic cop" within page. If successful, set key within data entry to null 
-    return -1;
-}
-
-RC IndexManager::insertInLeaf(void *pageData, const Attribute &attr, const void *key, const RID &rid)
-{
-    // Should return SUCCESS if new data entry is inserted into leaf page. If page is full, return IX_INSERT_SPLIT 
-    return -1;
-}
-
-RC IndexManager::splitLeaf(void *pageData, unsigned pageNum, const Attribute &attr, const void *key,
-        IXFileHandle &fileHandle, IndexDataEntry &newIndexDataEntry)
-{
     bool varchar = false;
     if (attr.type == TypeVarChar)
         varchar = true;
@@ -510,24 +498,47 @@ RC IndexManager::splitLeaf(void *pageData, unsigned pageNum, const Attribute &at
     // newIndexDataEntry has the information that must be inserted into one of the pages.
     IndexHeader indexHeader = getIndexHeader(pageData);
     // Current page will keep half of the entries.
-    uint32_t numOldEntries = ceil(indexHeader.dataEntryNumber / 2);
+    uint32_t numOldEntries = floor(indexHeader.dataEntryNumber / 2);
+    // We skip one entry because it will be copied up.
+    unsigned indexOfFirstEntry = numOldEntries + 1;
     // Get half of the entries for the new page.
-    uint32_t numNewEntries = floor(indexHeader.dataEntryNumber / 2);
+    uint32_t numNewEntries = ceil(indexHeader.dataEntryNumber / 2) - 1;
+
+    SplitDataEntry splitEntry;
+    splitEntry.dataEntry = getIndexDataEntry(pageData, numOldEntries);
+    splitEntry.isTypeVarChar = varchar;
+    splitEntry.rc = SUCCESS;
+    if (varchar) {
+        int length;
+        memcpy(&length, (char *)pageData + splitEntry.dataEntry.key, sizeof(int));
+        int totalLength = sizeof(int) + length;
+        splitEntry.data = calloc(totalLength, 1);
+        memcpy((char *)splitEntry.data, (char *)pageData + splitEntry.dataEntry.key, totalLength);
+    } else {
+        splitEntry.data = NULL;
+    }
 
     void *newPageData = calloc(PAGE_SIZE, 1);
-    if (newPageData == NULL)
-        return IX_MALLOC_FAILED;
+    if (newPageData == NULL) {
+        splitEntry.rc = IX_MALLOC_FAILED;
+        return splitEntry;
+    }
     
-    // Must compare the new key with the first key on the new page..
+    // Must compare the new key with the first key on the new page.
     // Then, we can call insert on the split leaf page because we must have room.
-    unsigned offset = sizeof(IndexHeader) + (sizeof(IndexDataEntry) * numNewEntries);
-    RC value = compareKey(pageData, key, attr, offset);
+    RC value = compareKey(pageData, key, attr, getIndexDataEntry(pageData, indexOfFirstEntry));
     bool newPageInsert;
     if (value == -1) {
         newPageInsert = false;
     } else {
         newPageInsert = true;
     }
+
+    // Update the old index header.
+    indexHeader.dataEntryNumber = numOldEntries;
+    indexHeader.nextSiblingPageNum = fileHandle.getNumberOfPages();
+    if (newPageInsert)
+        insertInLeaf(newPageData, attr, key, newIndexDataEntry);
 
     // Prepare the new pages header.
     IndexHeader newHeader;
@@ -539,26 +550,22 @@ RC IndexManager::splitLeaf(void *pageData, unsigned pageNum, const Attribute &at
     newHeader.freeSpaceOffset = PAGE_SIZE;
 
     setIndexHeader(newPageData, newHeader);
-    newPageFromEntries(pageData, newPageData, numOldEntries, numNewEntries, varchar);
+    newPageFromEntries(pageData, newPageData, indexOfFirstEntry, numNewEntries, varchar);
     IndexDataEntry newDataEntry = getIndexDataEntry(pageData, 0);
-
-    // Update the old index header.
-    indexHeader.dataEntryNumber = numOldEntries;
-    indexHeader.nextSiblingPageNum = fileHandle.getNumberOfPages();
-    if (newPageInsert)
-        insertInLeaf(newPageData, attr, key, newIndexDataEntry);
 
     fileHandle.appendPage(newPageData);
 
     // Update the prevSiblingPageNum of the old nextSiblingPageNum.
-    memset(newPageData, 0, PAGE_SIZE);
-    fileHandle.readPage(newHeader.nextSiblingPageNum, newPageData);
+    if (newHeader.nextSiblingPageNum != 0) {
+        memset(newPageData, 0, PAGE_SIZE);
+        fileHandle.readPage(newHeader.nextSiblingPageNum, newPageData);
 
-    IndexHeader siblingHeader = getIndexHeader(newPageData);
-    siblingHeader.prevSiblingPageNum = indexHeader.nextSiblingPageNum;
-    setIndexHeader(newPageData, siblingHeader);
+        IndexHeader siblingHeader = getIndexHeader(newPageData);
+        siblingHeader.prevSiblingPageNum = indexHeader.nextSiblingPageNum;
+        setIndexHeader(newPageData, siblingHeader);
 
-    fileHandle.writePage(newHeader.nextSiblingPageNum, newPageData);
+        fileHandle.writePage(newHeader.nextSiblingPageNum, newPageData);
+    }
 
     // Restructure the current page data by writing the information into the temp page.
     memset(newPageData, 0, PAGE_SIZE);
@@ -570,7 +577,105 @@ RC IndexManager::splitLeaf(void *pageData, unsigned pageNum, const Attribute &at
     fileHandle.writePage(pageNum, newPageData);
 
     free(newPageData);
+    return splitEntry;
+}
+
+RC IndexManager::insertInLeaf(void *pageData, const Attribute &attr, const void *key, const RID &rid)
+{
+    // Should return SUCCESS if new data entry is inserted into leaf page. If page is full, return IX_INSERT_SPLIT 
     return -1;
+}
+
+SplitDataEntry IndexManager::splitLeaf(void *pageData, unsigned pageNum, const Attribute &attr, const void *key,
+        IXFileHandle &fileHandle, IndexDataEntry &newIndexDataEntry)
+{
+    bool varchar = false;
+    if (attr.type == TypeVarChar)
+        varchar = true;
+
+    // newIndexDataEntry has the information that must be inserted into one of the pages.
+    IndexHeader indexHeader = getIndexHeader(pageData);
+    // Current page will keep half of the entries.
+    uint32_t numOldEntries = floor(indexHeader.dataEntryNumber / 2);
+    // We skip one entry because it will be copied up.
+    unsigned indexOfFirstEntry = numOldEntries;
+    // Get half of the entries for the new page.
+    uint32_t numNewEntries = ceil(indexHeader.dataEntryNumber / 2);
+
+    SplitDataEntry splitEntry;
+    splitEntry.dataEntry = getIndexDataEntry(pageData, numOldEntries);
+    splitEntry.isTypeVarChar = varchar;
+    splitEntry.rc = SUCCESS;
+    if (varchar) {
+        int length;
+        memcpy(&length, (char *)pageData + splitEntry.dataEntry.key, sizeof(int));
+        int totalLength = sizeof(int) + length;
+        splitEntry.data = calloc(totalLength, 1);
+        memcpy((char *)splitEntry.data, (char *)pageData + splitEntry.dataEntry.key, totalLength);
+    } else {
+        splitEntry.data = NULL;
+    }
+
+    void *newPageData = calloc(PAGE_SIZE, 1);
+    if (newPageData == NULL) {
+       splitEntry.rc = IX_MALLOC_FAILED;
+       return splitEntry;
+    }
+    
+    // Must compare the new key with the first key on the new page.
+    // Then, we can call insert on the split leaf page because we must have room.
+    RC value = compareKey(pageData, key, attr, getIndexDataEntry(pageData, indexOfFirstEntry));
+    bool newPageInsert;
+    if (value == -1) {
+        newPageInsert = false;
+    } else {
+        newPageInsert = true;
+    }
+
+    // Update the old index header.
+    indexHeader.dataEntryNumber = numOldEntries;
+    indexHeader.nextSiblingPageNum = fileHandle.getNumberOfPages();
+    if (newPageInsert)
+        insertInLeaf(newPageData, attr, key, newIndexDataEntry);
+
+    // Prepare the new pages header.
+    IndexHeader newHeader;
+    newHeader.leaf = true;
+    newHeader.dataEntryNumber = numNewEntries;
+    newHeader.prevSiblingPageNum = pageNum;
+    newHeader.nextSiblingPageNum = indexHeader.nextSiblingPageNum;
+    newHeader.leftChildPageNum = 0;
+    newHeader.freeSpaceOffset = PAGE_SIZE;
+
+    setIndexHeader(newPageData, newHeader);
+    newPageFromEntries(pageData, newPageData, indexOfFirstEntry, numNewEntries, varchar);
+    IndexDataEntry newDataEntry = getIndexDataEntry(pageData, 0);
+
+    fileHandle.appendPage(newPageData);
+
+    // Update the prevSiblingPageNum of the old nextSiblingPageNum.
+    if (newHeader.nextSiblingPageNum != 0) {
+        memset(newPageData, 0, PAGE_SIZE);
+        fileHandle.readPage(newHeader.nextSiblingPageNum, newPageData);
+
+        IndexHeader siblingHeader = getIndexHeader(newPageData);
+        siblingHeader.prevSiblingPageNum = indexHeader.nextSiblingPageNum;
+        setIndexHeader(newPageData, siblingHeader);
+
+        fileHandle.writePage(newHeader.nextSiblingPageNum, newPageData);
+    }
+
+    // Restructure the current page data by writing the information into the temp page.
+    memset(newPageData, 0, PAGE_SIZE);
+    setIndexHeader(newPageData, indexHeader);
+    newPageFromEntries(pageData, newPageData, numOldEntries, numNewEntries, varchar);
+    if (!newPageInsert)
+        insertInLeaf(newPageData, attr, key, newIndexDataEntry);
+
+    fileHandle.writePage(pageNum, newPageData);
+
+    free(newPageData);
+    return splitEntry;
 }
 
 // returns page number of first leaf page to look at for possible value 

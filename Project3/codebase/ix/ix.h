@@ -47,6 +47,14 @@ typedef struct IndexDataEntry
     RID rid;
 } IndexDataEntry;
 
+typedef struct SplitDataEntry
+{
+    IndexDataEntry dataEntry;
+    bool isTypeVarChar;
+    void *data;
+    RC rc;
+} SplitDataEntry;
+
 class IX_ScanIterator;
 class IXFileHandle;
 
@@ -115,9 +123,9 @@ class IndexManager {
         RC insertInInternal(void *pageData, const Attribute &attr, const void *key, IndexDataEntry &newIndexDataEntry);
         RC insertInLeaf(void *pageData, const Attribute &attr, const void *key, const RID &rid);
 
-        RC splitLeaf(void *pageData, unsigned pageNum, const Attribute &attr, const void *key,
+        SplitDataEntry splitLeaf(void *pageData, unsigned pageNum, const Attribute &attr, const void *key,
                 IXFileHandle &fileHandle, IndexDataEntry &newIndexDataEntry);
-        RC splitInternal(void *pageData, unsigned pageNum, const Attribute &attr, const void *key,
+        SplitDataEntry splitInternal(void *pageData, unsigned pageNum, const Attribute &attr, const void *key,
                 IXFileHandle &fileHandle, IndexDataEntry &newIndexDataEntry);
         void newPageFromEntries(void *oldPageData, void *newPageData, uint32_t startEntry, uint32_t numEntries, bool isTypeVarChar);
 
