@@ -116,17 +116,21 @@ class IndexManager {
         unsigned getRootPage(IXFileHandle &fileHandle);
         unsigned getChildPageNum(void *pageData, const void *key, const Attribute &attr);
         bool isNonLeaf(void *pageData);
+
         unsigned getPageFreeSpaceSize(void *pageData);
+        bool canFitEntry(void *pageData, const Attribute &attr, const void *key);
 
         RC insert(const Attribute &attr, const void *key, const RID &rid, IXFileHandle &fileHandle,
-                IndexDataEntry &newIndexDataEntry, unsigned pageNum);
-        RC insertInInternal(void *pageData, const Attribute &attr, const void *key, IndexDataEntry &newIndexDataEntry);
-        RC insertInLeaf(void *pageData, const Attribute &attr, const void *key, const RID &rid);
+                unsigned pageNum);
+        RC insertInInternal(void *pageData, unsigned pageNum, const Attribute &attr, const void *key, 
+                const RID &rid, IXFileHandle &fileHandle);
+        RC insertInLeaf(void *pageData, unsigned pageNum, const Attribute &attr, const void *key,
+                const RID &rid, IXFileHandle &fileHandle);
 
         SplitDataEntry splitLeaf(void *pageData, unsigned pageNum, const Attribute &attr, const void *key,
-                IXFileHandle &fileHandle, IndexDataEntry &newIndexDataEntry);
+                const RID &rid, IXFileHandle &fileHandle);
         SplitDataEntry splitInternal(void *pageData, unsigned pageNum, const Attribute &attr, const void *key,
-                IXFileHandle &fileHandle, IndexDataEntry &newIndexDataEntry);
+                const RID &rid, IXFileHandle &fileHandle);
         void newPageFromEntries(void *oldPageData, void *newPageData, uint32_t startEntry, uint32_t numEntries, bool isTypeVarChar);
 
         RC compareKey(void *pageData, const void *key, const Attribute &attr, IndexDataEntry &entry);
@@ -155,7 +159,6 @@ class IX_ScanIterator {
         // Terminate index scan
         RC close();
 };
-
 
 
 class IXFileHandle {
@@ -187,7 +190,6 @@ class IXFileHandle {
     // Private helper methods
     void setfd(FILE *fd);
     FILE *getfd();
-
 };
 
 #endif
