@@ -257,6 +257,7 @@ void IndexManager::printBtree(IXFileHandle &ixfileHandle, const Attribute &attri
             printTreeHelperVarChar(rootPageNum, 0, ixfileHandle);
             break;
     }
+    cout << endl;
     // printTreeHelper(rootPageNum, 0, ixfileHandle, attribute)
 
     // cout << "}"<< endl;
@@ -265,6 +266,11 @@ void IndexManager::printBtree(IXFileHandle &ixfileHandle, const Attribute &attri
 
 void IndexManager::printTreeHelperInt(uint32_t pageNum, uint16_t level, IXFileHandle &ixfileHandle) const {
     // to do add spacing based on level
+    char* spaces = (char*)calloc(level*4 + 1, sizeof(char));
+    for (int i = 0; i < level*4; i += 1) {
+        spaces[i] = ' ';
+    }
+    spaces[level*4] = '\0';
     void *pageData = malloc(PAGE_SIZE);
     if (ixfileHandle.printReadPage(pageNum, pageData) != SUCCESS){ // Assumption that the meta page is on page 0 of the file
         free(pageData);
@@ -274,7 +280,7 @@ void IndexManager::printTreeHelperInt(uint32_t pageNum, uint16_t level, IXFileHa
     IndexHeader header = printGetIndexHeader(pageData);
     if (header.leaf) {
         // then no children
-        cout << "{";
+        cout << spaces << "{";
         cout << "\"keys\": [";
 
         for (uint32_t i = 0; i < header.dataEntryNumber; i += 1) {
@@ -291,8 +297,8 @@ void IndexManager::printTreeHelperInt(uint32_t pageNum, uint16_t level, IXFileHa
         // with children
         uint32_t* children_pages = (uint32_t*)calloc(header.dataEntryNumber + 1, sizeof(uint32_t));
         children_pages[0] = header.leftChildPageNum;
-        cout << "{" << endl;
-        cout << "\"keys\": [";
+        cout << spaces << "{" << endl;
+        cout << spaces << "\"keys\": [";
 
         for (uint32_t i = 0; i < header.dataEntryNumber; i += 1) {
             if (i != 0)
@@ -302,22 +308,155 @@ void IndexManager::printTreeHelperInt(uint32_t pageNum, uint16_t level, IXFileHa
             cout << curEntry.key;
         }
         cout << "]," << endl;
-        cout << "\"children\": [" << endl;
+        cout << spaces << "\"children\": [" << endl;
         for (uint32_t i = 0; i < header.dataEntryNumber + 1; i += 1) {
             if (i != 0)
                 cout << ",";
             printTreeHelperInt(children_pages[i], level + 1, ixfileHandle);
             cout << endl;
         }
-        cout << "]}";
+        cout << spaces << "]}";
     }
     
-
+    free(spaces);
     free(pageData);
 }
 
-void IndexManager::printTreeHelperReal(uint32_t pageNum, uint16_t level, IXFileHandle &ixfileHandle) const {}
-void IndexManager::printTreeHelperVarChar(uint32_t pageNum, uint16_t level, IXFileHandle &ixfileHandle) const {}
+void IndexManager::printTreeHelperReal(uint32_t pageNum, uint16_t level, IXFileHandle &ixfileHandle) const {
+    // to do add spacing based on level
+    char* spaces = (char*)calloc(level*4 + 1, sizeof(char));
+    for (int i = 0; i < level*4; i += 1) {
+        spaces[i] = ' ';
+    }
+    spaces[level*4] = '\0';
+    void *pageData = malloc(PAGE_SIZE);
+    if (ixfileHandle.printReadPage(pageNum, pageData) != SUCCESS){ // Assumption that the meta page is on page 0 of the file
+        free(pageData);
+        cerr << "printing tree read page failed." << endl;
+        return;
+    }
+    IndexHeader header = printGetIndexHeader(pageData);
+    if (header.leaf) {
+        // then no children
+        cout << spaces << "{";
+        cout << "\"keys\": [";
+
+        for (uint32_t i = 0; i < header.dataEntryNumber; i += 1) {
+            if (i != 0)
+                cout << ",";
+            IndexDataEntry curEntry = printGetIndexDataEntry(pageData, i);
+            cout << curEntry.key << ": [(" << curEntry.rid.pageNum << "," << curEntry.rid.slotNum << ")]";
+        }
+        cout << "}";
+
+
+    } 
+    else {
+        // with children
+        uint32_t* children_pages = (uint32_t*)calloc(header.dataEntryNumber + 1, sizeof(uint32_t));
+        children_pages[0] = header.leftChildPageNum;
+        cout << spaces << "{" << endl;
+        cout << spaces << "\"keys\": [";
+
+        for (uint32_t i = 0; i < header.dataEntryNumber; i += 1) {
+            if (i != 0)
+                cout << ",";
+            IndexDataEntry curEntry = printGetIndexDataEntry(pageData, i);
+            children_pages[i+1] = curEntry.rid.pageNum;
+            cout << curEntry.key;
+        }
+        cout << "]," << endl;
+        cout << spaces << "\"children\": [" << endl;
+        for (uint32_t i = 0; i < header.dataEntryNumber + 1; i += 1) {
+            if (i != 0)
+                cout << ",";
+            printTreeHelperReal(children_pages[i], level + 1, ixfileHandle);
+            cout << endl;
+        }
+        cout << spaces << "]}";
+    }
+    
+    free(spaces);
+    free(pageData);
+}
+void IndexManager::printTreeHelperVarChar(uint32_t pageNum, uint16_t level, IXFileHandle &ixfileHandle) const {
+    // to do add spacing based on level
+    char* spaces = (char*)calloc(level*4 + 1, sizeof(char));
+    for (int i = 0; i < level*4; i += 1) {
+        spaces[i] = ' ';
+    }
+    spaces[level*4] = '\0';
+
+
+
+    void *pageData = malloc(PAGE_SIZE);
+    if (ixfileHandle.printReadPage(pageNum, pageData) != SUCCESS){ // Assumption that the meta page is on page 0 of the file
+        free(pageData);
+        cerr << "printing tree read page failed." << endl;
+        return;
+    }
+
+    IndexHeader header = printGetIndexHeader(pageData);
+    if (header.leaf) {
+        // then no children
+        cout << spaces << "{";
+        cout << "\"keys\": [";
+
+        for (uint32_t i = 0; i < header.dataEntryNumber; i += 1) {
+            if (i != 0)
+                cout << ",";
+            IndexDataEntry curEntry = printGetIndexDataEntry(pageData, i);
+            uint32_t length;
+            memcpy(&length, (char*)pageData + curEntry.key, VARCHAR_LENGTH_SIZE);
+
+            char* buf = (char*)malloc(length + 1);
+            memcpy(buf, (char*)pageData + curEntry.key + VARCHAR_LENGTH_SIZE, length);
+            buf[length] = '\0';
+            cout << buf << ": [(" << curEntry.rid.pageNum << "," << curEntry.rid.slotNum << ")]";
+            free(buf);
+        }
+        cout << "}";
+
+
+    } 
+    else {
+        // with children
+        uint32_t* children_pages = (uint32_t*)calloc(header.dataEntryNumber + 1, sizeof(uint32_t));
+        children_pages[0] = header.leftChildPageNum;
+        cout << spaces << "{" << endl;
+        cout << spaces << "\"keys\": [";
+
+        for (uint32_t i = 0; i < header.dataEntryNumber; i += 1) {
+            if (i != 0)
+                cout << ",";
+            IndexDataEntry curEntry = printGetIndexDataEntry(pageData, i);
+
+            uint32_t length;
+            memcpy(&length, (char*)pageData + curEntry.key, VARCHAR_LENGTH_SIZE);
+
+            char* buf = (char*)malloc(length + 1);
+            memcpy(buf, (char*)pageData + curEntry.key + VARCHAR_LENGTH_SIZE, length);
+            buf[length] = '\0';
+
+            children_pages[i+1] = curEntry.rid.pageNum;
+
+            cout << buf;
+            free(buf);
+        }
+        cout << "]," << endl;
+        cout << spaces << "\"children\": [" << endl;
+        for (uint32_t i = 0; i < header.dataEntryNumber + 1; i += 1) {
+            if (i != 0)
+                cout << "," << endl;
+            printTreeHelperReal(children_pages[i], level + 1, ixfileHandle);
+            cout << endl;
+        }
+        cout << spaces << "]}";
+    }
+    
+    free(spaces);
+    free(pageData);
+}
 
 //need to create const versions of a lot of reading functions
 unsigned IndexManager::printGetRootPage(const IXFileHandle &fileHandle) const {
@@ -918,7 +1057,7 @@ RC IndexManager::findOptimalPage(const Attribute &attr, const void* key, IXFileH
         memcpy(&key_val_int, key, 4);
         for (uint32_t i = 0; i < header.dataEntryNumber; i += 1) {
             entry = getIndexDataEntry(cur, i);
-            if (key_val_int < entry.key) {
+            if (key_val_int <= entry.key) {
                 if (i == 0) {
                     return optimalPageHelper(attr, key, fileHandle, header.leftChildPageNum);
                 }
@@ -928,9 +1067,9 @@ RC IndexManager::findOptimalPage(const Attribute &attr, const void* key, IXFileH
                 }
                 
             }
-            else if (key_val_int == entry.key) {
-                return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);
-            }
+            // else if (key_val_int == entry.key) {
+            //     return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);
+            // }
         }
         return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);// break;
     case TypeReal:
@@ -938,7 +1077,7 @@ RC IndexManager::findOptimalPage(const Attribute &attr, const void* key, IXFileH
         memcpy(&key_val, key, 4);
         for (uint32_t i = 0; i < header.dataEntryNumber; i += 1) {
             entry = getIndexDataEntry(cur, i);
-            if (key_val < entry.key) {
+            if (key_val <= entry.key) {
                 if (i == 0) {
                     return optimalPageHelper(attr, key, fileHandle, header.leftChildPageNum);
                 }
@@ -948,9 +1087,9 @@ RC IndexManager::findOptimalPage(const Attribute &attr, const void* key, IXFileH
                 }
                 
             }
-            else if (key_val == entry.key) {
-                return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);
-            }
+            // else if (key_val == entry.key) {
+            //     return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);
+            // }
         }
         return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);// break;
     case TypeVarChar:
@@ -973,7 +1112,7 @@ RC IndexManager::findOptimalPage(const Attribute &attr, const void* key, IXFileH
 
 
             int cmp = strcmp(key_buf, buf);
-            if (cmp < 0) {
+            if (cmp <= 0) {
                 // key is less than what current index entry is, meaning we need to look at previous page
                 if (i == 0) {
                     return optimalPageHelper(attr, key, fileHandle, header.leftChildPageNum);
@@ -983,9 +1122,9 @@ RC IndexManager::findOptimalPage(const Attribute &attr, const void* key, IXFileH
                     return optimalPageHelper(attr, key, fileHandle, correct_entry.rid.pageNum);
                 }
             }
-            if (cmp == 0) {
-                return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);
-            }
+            // if (cmp == 0) {
+            //     return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);
+            // }
         }
         // if we get here without having returned a value, then we return the final page entry thingy
         return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);// break;
@@ -1010,7 +1149,7 @@ RC IndexManager::optimalPageHelper(const Attribute &attr, const void* key, IXFil
         memcpy(&key_val_int, key, 4);
         for (uint32_t i = 0; i < header.dataEntryNumber; i += 1) {
             entry = getIndexDataEntry(cur, i);
-            if (key_val_int < entry.key) {
+            if (key_val_int <= entry.key) {
                 if (i == 0) {
                     return optimalPageHelper(attr, key, fileHandle, header.leftChildPageNum);
                 }
@@ -1020,9 +1159,9 @@ RC IndexManager::optimalPageHelper(const Attribute &attr, const void* key, IXFil
                 }
                 
             }
-            else if (key_val_int == entry.key) {
-                return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);
-            }
+            // else if (key_val_int == entry.key) {
+            //     return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);
+            // }
         }
         return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);
         break;
@@ -1031,7 +1170,7 @@ RC IndexManager::optimalPageHelper(const Attribute &attr, const void* key, IXFil
         memcpy(&key_val, key, 4);
         for (uint32_t i = 0; i < header.dataEntryNumber; i += 1) {
             entry = getIndexDataEntry(cur, i);
-            if (key_val < entry.key) {
+            if (key_val <= entry.key) {
                 if (i == 0) {
                     return optimalPageHelper(attr, key, fileHandle, header.leftChildPageNum);
                 }
@@ -1041,9 +1180,9 @@ RC IndexManager::optimalPageHelper(const Attribute &attr, const void* key, IXFil
                 }
                 
             }
-            else if (key_val == entry.key) {
-                return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);
-            }
+            // else if (key_val == entry.key) {
+            //     return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);
+            // }
         }
         return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);// break;
     case TypeVarChar:
@@ -1066,7 +1205,7 @@ RC IndexManager::optimalPageHelper(const Attribute &attr, const void* key, IXFil
 
 
             int cmp = strcmp(key_buf, buf);
-            if (cmp < 0) {
+            if (cmp <= 0) {
                 // key is less than what current index entry is, meaning we need to look at previous page
                 if (i == 0) {
                     return optimalPageHelper(attr, key, fileHandle, header.leftChildPageNum);
@@ -1076,9 +1215,9 @@ RC IndexManager::optimalPageHelper(const Attribute &attr, const void* key, IXFil
                     return optimalPageHelper(attr, key, fileHandle, correct_entry.rid.pageNum);
                 }
             }
-            if (cmp == 0) {
-                return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);
-            }
+            // if (cmp == 0) {
+            //     return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);
+            // }
         }
         // if we get here without having returned a value, then we return the final page entry thingy
         return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);// break;
