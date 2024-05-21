@@ -44,7 +44,7 @@ RC IndexManager::createFile(const string &fileName)
     if (openFile(fileName, ixfileHandle) != SUCCESS) {
         return IX_CREATE_FAILED;
     }
-    cerr << "got here" << endl;
+    /* cerr << "got here" << endl; */
     // Setting up the header page.
     void * headerPageData = calloc(PAGE_SIZE, 1);
     if (headerPageData == NULL)
@@ -1335,8 +1335,11 @@ RC IndexManager::deleteInLeaf(void *pageData, unsigned pageNum, const Attribute 
     // We add -1 to account for 0-indexed entryNumber.
     unsigned entriesToShiftSize = (header.dataEntryNumber - entryNumber - 1) * sizeof(IndexDataEntry);
     header.dataEntryNumber--;
-    if (entriesToShiftSize > 0)
+    if (entriesToShiftSize > 0) {
         memmove((char*)pageData + entryOffset, (char*)pageData + nextEntryOffset, entriesToShiftSize);
+    } else {
+        memset((char *)pageData + entryOffset, 0, sizeof(IndexDataEntry));
+    }
 
     if (attr.type == TypeVarChar) {
         int varcharOffset = entryToDelete.key;
@@ -1349,7 +1352,6 @@ RC IndexManager::deleteInLeaf(void *pageData, unsigned pageNum, const Attribute 
         memmove(startOfShift + totalVarcharLength, startOfShift, varcharOffset - header.freeSpaceOffset);
 
         header.freeSpaceOffset += totalVarcharLength;
-        setIndexHeader(pageData, header);
 
         // Update the offsets of remaining varchars in the entries
         for (unsigned i = 0; i < header.dataEntryNumber; i++) {
@@ -1361,6 +1363,7 @@ RC IndexManager::deleteInLeaf(void *pageData, unsigned pageNum, const Attribute 
         }
     }
 
+    setIndexHeader(pageData, header);
     if (fileHandle.writePage(pageNum, pageData))
         return IX_WRITE_FAILED;
   
