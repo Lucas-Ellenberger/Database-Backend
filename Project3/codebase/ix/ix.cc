@@ -173,7 +173,7 @@ RC IndexManager::deleteEntry(IXFileHandle &ixfileHandle, const Attribute &attrib
 
     int pageNum = findOptimalPage(attribute, key, ixfileHandle);
     void *pageData = malloc(PAGE_SIZE);
-    if (ixfileHandle.readPage(pageNum, pageData) != SUCCESS){
+    if (ixfileHandle.readPage(pageNum, pageData) != SUCCESS) {
         return IX_READ_FAILED;
     }
 
@@ -1277,10 +1277,9 @@ RC IndexManager::deleteInLeaf(void *pageData, unsigned pageNum, const Attribute 
         }
     }
 
-    if (fileHandle.writePage(pageNum, pageData)){
+    if (fileHandle.writePage(pageNum, pageData))
         return IX_WRITE_FAILED;
-    }
-    
+  
     return SUCCESS;
 }
 
