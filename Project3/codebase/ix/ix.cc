@@ -128,6 +128,9 @@ RC IndexManager::closeFile(IXFileHandle &ixfileHandle)
 
 RC IndexManager::insertEntry(IXFileHandle &ixfileHandle, const Attribute &attribute, const void *key, const RID &rid)
 {  
+    if (!isValidAttribute(attribute)){
+        return IX_NO_SUCH_ATTR;
+    }
     // First create data entry to be inserted
     unsigned rootPageNum = getRootPage(ixfileHandle); 
 
@@ -135,8 +138,26 @@ RC IndexManager::insertEntry(IXFileHandle &ixfileHandle, const Attribute &attrib
 }
 
 RC IndexManager::deleteEntry(IXFileHandle &ixfileHandle, const Attribute &attribute, const void *key, const RID &rid)
-{
-    return -1;
+{   
+    if (!isValidAttribute(attribute)){
+        return IX_NO_SUCH_ATTR;
+    }
+
+    int pageNum = findOptimalPage(attribute, key, ixfileHandle);
+    void *pageData = malloc(PAGE_SIZE);
+    if (ixfileHandle.readPage(pageData, pageNum) != SUCCESS){
+        return IX_READ_FAILED;
+    }
+
+    IndexHeader header = getIndexHeader(pageData);
+    for (uint32_t i=0; i < header.dataEntryNumber; i++){
+        IndexDataEntry dataEntry = getIndexDataEntry(pageData, i);
+        RC value = compareKey(pageData, key, attribute, dataEntry);
+        if (value == 0){ // We found data entry!
+            return deleteInLeaf(pageData, pageNum, attribute, i, ixfileHandle);
+        }
+    }
+    return IX_REMOVE_FAILED; // Couldn't find data entry to delete
 }
 
 
@@ -1155,6 +1176,61 @@ void IndexManager::newPageFromEntries(void *oldPageData, void *newPageData, uint
         newDataEntry.key = freeSpaceOffset;
         setIndexDataEntry(newPageData, i, newDataEntry);
     }
+}
+
+bool IndexManager::isValidAttribute(const Attribute &attr){
+    switch (attr.type){
+    case TypeInt:
+        return true;
+    case TypeReal:
+        return true;
+    case TypeVarChar:
+        return true;
+    default:
+        return false;
+    }
+}
+
+RC IndexManager::deleteInLeaf(void *pageData, unsigned pageNum, const Attribute &attr, uint32_t entryNumber, IXFileHandle &fileHandle){
+    IndexHeader header = getIndexHeader(pageData);
+    unsigned entryOffset = sizeof(IndexHeader) + entryNumber * sizeof(IndexDataEntry);
+    IndexDataEntry entryToDelete = getIndexDataEntry(pageData, entryNumber);
+
+    // Handle deletion of the entry and shift any following entries to the left
+    unsigned nextEntryOffset = entryOffset + sizeof(IndexDataEntry);
+    unsigned entriesToShiftSize = (header.dataEntryNumber - entryNumber - 1) * sizeof(IndexDataEntry); // We add -1 to account for 0-indexed entryNumber
+    header.dataEntryNumber--;
+    if (entriesToShiftSize > 0) {
+        memmove((char*)pageData + entryOffset, (char*)pageData + nextEntryOffset, entriesToShiftSize);
+    }
+
+
+    if (attr.type == TypeVarChar) {
+        int varcharOffset = entryToDelete.key;
+        int varcharLength;
+        memcpy(&varcharLength, (char*)pageData + varcharOffset, sizeof(int));
+        int totalVarcharLength = sizeof(int) + varcharLength;
+
+        // Shift varchar data to cover the deleted entry's varchar data
+        char *startOfShift = (char*)pageData + header.freeSpaceOffset;
+        memmove(startOfShift + totalVarcharLength, startOfShift, varcharOffset - header.freeSpaceOffset);
+
+        header.freeSpaceOffset += totalVarcharLength;
+        setIndexHeader(pageData, header);
+
+        // Update the offsets of remaining varchars in the entries
+        for (unsigned i = entryNumber; i < header.dataEntryNumber; ++i) {
+            IndexDataEntry updatedEntry = getIndexDataEntry(pageData, i);
+            if (updatedEntry.key < varcharOffset) {
+                updatedEntry.key += totalVarcharLength;
+                setIndexDataEntry(pageData, i, updatedEntry);
+            }
+        }
+    }
+    if (fileHandle.writePage(pageNum, pageData)){
+        return IX_WRITE_FAILED;
+    }
+    return SUCCESS;
 }
 
 void IXFileHandle::setfd(FILE *fd)

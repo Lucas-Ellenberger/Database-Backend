@@ -116,6 +116,7 @@ class IndexManager {
         unsigned getRootPage(IXFileHandle &fileHandle);
         unsigned getChildPageNum(void *pageData, const void *key, const Attribute &attr);
         bool isNonLeaf(void *pageData);
+        bool isValidAttribute(const Attribute &attr);
 
         unsigned getPageFreeSpaceSize(void *pageData);
         bool canFitEntry(void *pageData, const Attribute &attr, const void *key);
@@ -126,6 +127,8 @@ class IndexManager {
                 const RID &rid, IXFileHandle &fileHandle);
         RC insertInLeaf(void *pageData, unsigned pageNum, const Attribute &attr, const void *key,
                 const RID &rid, IXFileHandle &fileHandle);
+
+        RC deleteInLeaf(void *pageData, unsigned pageNum, const Attribute &attr, uint32_t entryNumber, IXFileHandle &fileHandle);
 
         SplitDataEntry splitLeaf(void *pageData, unsigned pageNum, const Attribute &attr, const void *key,
                 const RID &rid, IXFileHandle &fileHandle);
