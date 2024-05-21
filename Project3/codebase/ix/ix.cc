@@ -75,6 +75,7 @@ RC IndexManager::createFile(const string &fileName)
     if (ixfileHandle.appendPage(firstLeafPage))
         return IX_APPEND_FAILED;
     
+    free(firstLeafPage);
     closeFile(ixfileHandle);
     return SUCCESS;
 }
@@ -490,7 +491,7 @@ void IndexManager::newLeafPage(void *pageData, int nextSiblingPageNum, int prevS
 void IndexManager::setIndexHeader(void *pageData, IndexHeader indexHeader)
 {
     // Set the index header.
-    memcpy(pageData, &indexHeader, sizeof(IndexHeader));
+    memcpy((char *)pageData, &indexHeader, sizeof(IndexHeader));
 }
 
 IndexHeader IndexManager::getIndexHeader(void *pageData)
@@ -505,7 +506,7 @@ void IndexManager::setIndexDataEntry(void *pageData, unsigned indexEntryNumber, 
 {
     // Setting the index data entry.
     memcpy(
-            ((char *) pageData + sizeof(IndexHeader) + (indexEntryNumber * sizeof(IndexDataEntry))),
+            ((char *)pageData + sizeof(IndexHeader) + (indexEntryNumber * sizeof(IndexDataEntry))),
             &dataEntry,
             sizeof(IndexDataEntry)
           );
@@ -625,7 +626,7 @@ bool IndexManager::isNonLeaf(void *pageData)
 unsigned IndexManager::getChildPageNum(void *pageData, const void *key, const Attribute &attr)
 {
     IndexHeader header = getIndexHeader(pageData);
-    unsigned offset = sizeof(IndexHeader);
+    /* unsigned offset = sizeof(IndexHeader); */
     uint32_t lastChildPage = header.leftChildPageNum;
 
     for (unsigned i = 0; i < header.dataEntryNumber; i++) {
@@ -724,7 +725,7 @@ SplitDataEntry IndexManager::splitInternal(void *pageData, unsigned pageNum, con
 
     setIndexHeader(newPageData, newHeader);
     newPageFromEntries(pageData, newPageData, indexOfFirstEntry, numNewEntries, varchar);
-    IndexDataEntry newDataEntry = getIndexDataEntry(pageData, 0);
+    /* IndexDataEntry newDataEntry = getIndexDataEntry(pageData, 0); */
 
     fileHandle.appendPage(newPageData);
 
@@ -743,7 +744,7 @@ SplitDataEntry IndexManager::splitInternal(void *pageData, unsigned pageNum, con
     // Restructure the current page data by writing the information into the temp page.
     memset(newPageData, 0, PAGE_SIZE);
     setIndexHeader(newPageData, indexHeader);
-    newPageFromEntries(pageData, newPageData, numOldEntries, numNewEntries, varchar);
+    newPageFromEntries(pageData, newPageData, 0, numOldEntries, varchar);
     if (!newPageInsert)
         insertInInternal(newPageData, pageNum, attr, key, rid, fileHandle);
 
@@ -756,7 +757,9 @@ SplitDataEntry IndexManager::splitInternal(void *pageData, unsigned pageNum, con
 RC IndexManager::insertInLeaf(void *pageData, unsigned pageNum, const Attribute &attr, const void *key, const RID &rid, IXFileHandle &fileHandle)
 {
     // Should return SUCCESS if new data entry is inserted into leaf page. If page is full, return IX_INSERT_SPLIT 
-    // TODO: Check if we can fit another dataEntry and key on the page!
+    if (!canFitEntry(pageData, attr, key))
+        return IX_LEAF_SPLIT;
+
     IndexHeader header = getIndexHeader(pageData);
 
     // Prepare the new data entry and write var char if necessary.
@@ -868,7 +871,7 @@ SplitDataEntry IndexManager::splitLeaf(void *pageData, unsigned pageNum, const A
 
     setIndexHeader(newPageData, newHeader);
     newPageFromEntries(pageData, newPageData, indexOfFirstEntry, numNewEntries, varchar);
-    IndexDataEntry newDataEntry = getIndexDataEntry(pageData, 0);
+    /* IndexDataEntry newDataEntry = getIndexDataEntry(pageData, 0); */
 
     fileHandle.appendPage(newPageData);
 
@@ -887,7 +890,7 @@ SplitDataEntry IndexManager::splitLeaf(void *pageData, unsigned pageNum, const A
     // Restructure the current page data by writing the information into the temp page.
     memset(newPageData, 0, PAGE_SIZE);
     setIndexHeader(newPageData, indexHeader);
-    newPageFromEntries(pageData, newPageData, numOldEntries, numNewEntries, varchar);
+    newPageFromEntries(pageData, newPageData, 0, numOldEntries, varchar);
     if (!newPageInsert)
         insertInLeaf(newPageData, pageNum, attr, key, rid, fileHandle);
 
