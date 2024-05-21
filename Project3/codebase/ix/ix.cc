@@ -44,7 +44,7 @@ RC IndexManager::createFile(const string &fileName)
     if (openFile(fileName, ixfileHandle) != SUCCESS) {
         return IX_CREATE_FAILED;
     }
-    cerr << "got here" << endl;
+    /* cerr << "got here" << endl; */
     // Setting up the header page.
     void * headerPageData = calloc(PAGE_SIZE, 1);
     if (headerPageData == NULL)
@@ -229,8 +229,16 @@ void printTree(Node *t, int depth) {
 }
 */
 
+
+
+
+
+
+
+
+
 void IndexManager::printBtree(IXFileHandle &ixfileHandle, const Attribute &attribute) const {
-    unsigned rootPageNum = getRootPage(ixfileHandle);
+    unsigned rootPageNum = printGetRootPage(ixfileHandle);
     // void *pageData = malloc(PAGE_SIZE);
     // if (fileHandle.readPage(rootPageNum, pageData) != SUCCESS){ // Assumption that the meta page is on page 0 of the file
     //     free(pageData);
@@ -254,15 +262,15 @@ void IndexManager::printBtree(IXFileHandle &ixfileHandle, const Attribute &attri
     // free(pageData);
 }
 
-void IndexManager::printTreeHelperInt(uint32_t pageNum, uint16_t level, IXFileHandle &ixfileHandle) {
+void IndexManager::printTreeHelperInt(uint32_t pageNum, uint16_t level, IXFileHandle &ixfileHandle) const {
     // to do add spacing based on level
     void *pageData = malloc(PAGE_SIZE);
-    if (ixfileHandle.readPage(pageNum, pageData) != SUCCESS){ // Assumption that the meta page is on page 0 of the file
+    if (ixfileHandle.printReadPage(pageNum, pageData) != SUCCESS){ // Assumption that the meta page is on page 0 of the file
         free(pageData);
         cerr << "printing tree read page failed." << endl;
         return;
     }
-    IndexHeader header = getIndexHeader(pageData);
+    IndexHeader header = printGetIndexHeader(pageData);
     if (header.leaf) {
         // then no children
         cout << "{";
@@ -271,7 +279,7 @@ void IndexManager::printTreeHelperInt(uint32_t pageNum, uint16_t level, IXFileHa
         for (uint32_t i = 0; i < header.dataEntryNumber; i += 1) {
             if (i != 0)
                 cout << ",";
-            IndexDataEntry curEntry = getIndexDataEntry(pageData, i);
+            IndexDataEntry curEntry = printGetIndexDataEntry(pageData, i);
             cout << curEntry.key << ": [(" << curEntry.rid.pageNum << "," << curEntry.rid.slotNum << ")]";
         }
         cout << "}";
@@ -288,7 +296,7 @@ void IndexManager::printTreeHelperInt(uint32_t pageNum, uint16_t level, IXFileHa
         for (uint32_t i = 0; i < header.dataEntryNumber; i += 1) {
             if (i != 0)
                 cout << ",";
-            IndexDataEntry curEntry = getIndexDataEntry(pageData, i);
+            IndexDataEntry curEntry = printGetIndexDataEntry(pageData, i);
             children_pages[i+1] = curEntry.rid.pageNum;
             cout << curEntry.key;
         }
@@ -307,8 +315,84 @@ void IndexManager::printTreeHelperInt(uint32_t pageNum, uint16_t level, IXFileHa
     free(pageData);
 }
 
-void IndexManager::printTreeHelperReal(uint32_t pageNum, uint16_t level, IXFileHandle &ixfileHandle) {}
-void IndexManager::printTreeHelperVarChar(uint32_t pageNum, uint16_t level, IXFileHandle &ixfileHandle) {}
+void IndexManager::printTreeHelperReal(uint32_t pageNum, uint16_t level, IXFileHandle &ixfileHandle) const {}
+void IndexManager::printTreeHelperVarChar(uint32_t pageNum, uint16_t level, IXFileHandle &ixfileHandle) const {}
+
+//need to create const versions of a lot of reading functions
+unsigned IndexManager::printGetRootPage(const IXFileHandle &fileHandle) const {
+    void *pageData = malloc(PAGE_SIZE);
+    if (fileHandle.printReadPage(0, pageData) != SUCCESS){ // Assumption that the meta page is on page 0 of the file
+        free(pageData);
+        return IX_READ_FAILED;
+    }
+
+    MetaDataHeader metaHeader = printGetMetaDataHeader(pageData);
+    unsigned rootPageNum = metaHeader.rootPageNum;
+    free(pageData);
+    return rootPageNum;
+}
+
+IndexHeader IndexManager::printGetIndexHeader(void *pageData) const {
+    IndexHeader indexHeader;
+    memcpy(&indexHeader, pageData, sizeof(IndexHeader));
+    return indexHeader;
+}
+
+IndexDataEntry IndexManager::printGetIndexDataEntry(const void *pageData, const unsigned indexEntryNumber) const {
+    IndexDataEntry dataEntry;
+    memcpy(
+            &dataEntry,
+            ((char *) pageData + sizeof(IndexHeader) + (indexEntryNumber * sizeof(IndexDataEntry))),
+            sizeof(IndexDataEntry)
+          );
+    return dataEntry;
+}
+
+MetaDataHeader IndexManager::printGetMetaDataHeader(const void *pageData) const {
+    // Getting the metadata header.
+    MetaDataHeader metaHeader;
+    memcpy(&metaHeader, pageData, sizeof(MetaDataHeader));
+    return metaHeader;
+}
+
+RC IXFileHandle::printReadPage(PageNum pageNum, void *data) const {
+    // If pageNum doesn't exist, error
+    if (printGetNumberOfPages() < pageNum)
+        return FH_PAGE_DN_EXIST;
+
+    // Try to seek to the specified page
+    if (fseek(_fd, PAGE_SIZE * pageNum, SEEK_SET))
+        return FH_SEEK_FAILED;
+
+    // Try to read the specified page
+    if (fread(data, 1, PAGE_SIZE, _fd) != PAGE_SIZE)
+        return FH_READ_FAILED;
+    return SUCCESS;
+}
+
+unsigned IXFileHandle::printGetNumberOfPages() const {
+    // Use stat to get the file size
+    struct stat sb;
+    if (fstat(fileno(_fd), &sb) != 0)
+        // On error, return 0
+        return 0;
+    // Filesize is always PAGE_SIZE * number of pages
+    return sb.st_size / PAGE_SIZE;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 IX_ScanIterator::IX_ScanIterator()
 {
@@ -545,12 +629,12 @@ unsigned IndexManager::getChildPageNum(void *pageData, const void *key, const At
     uint32_t lastChildPage = header.leftChildPageNum;
 
     for (unsigned i = 0; i < header.dataEntryNumber; i++) {
-        unsigned entryOffset = offset + i * sizeof(IndexDataEntry); // Calculates current iteration's entry offset
+        // unsigned entryOffset = offset + i * sizeof(IndexDataEntry); // Calculates current iteration's entry offset
 
         // Accesses current entry to grab update child page later
-        IndexDataEntry entry;
-        memcpy(&entry, (char*)pageData + entryOffset, sizeof(IndexDataEntry));
-    
+        IndexDataEntry entry = getIndexDataEntry(pageData, i);
+        // memcpy(&entry, (char*)pageData + entryOffset, sizeof(IndexDataEntry));
+
         int result = compareKey(pageData, key, attr, entry);
         if (result == -1) // If the provided key is less than the current entry's key, return the last child page number encountered
             return lastChildPage;
@@ -1251,8 +1335,11 @@ RC IndexManager::deleteInLeaf(void *pageData, unsigned pageNum, const Attribute 
     // We add -1 to account for 0-indexed entryNumber.
     unsigned entriesToShiftSize = (header.dataEntryNumber - entryNumber - 1) * sizeof(IndexDataEntry);
     header.dataEntryNumber--;
-    if (entriesToShiftSize > 0)
+    if (entriesToShiftSize > 0) {
         memmove((char*)pageData + entryOffset, (char*)pageData + nextEntryOffset, entriesToShiftSize);
+    } else {
+        memset((char *)pageData + entryOffset, 0, sizeof(IndexDataEntry));
+    }
 
     if (attr.type == TypeVarChar) {
         int varcharOffset = entryToDelete.key;
@@ -1265,7 +1352,6 @@ RC IndexManager::deleteInLeaf(void *pageData, unsigned pageNum, const Attribute 
         memmove(startOfShift + totalVarcharLength, startOfShift, varcharOffset - header.freeSpaceOffset);
 
         header.freeSpaceOffset += totalVarcharLength;
-        setIndexHeader(pageData, header);
 
         // Update the offsets of remaining varchars in the entries
         for (unsigned i = 0; i < header.dataEntryNumber; i++) {
@@ -1277,6 +1363,7 @@ RC IndexManager::deleteInLeaf(void *pageData, unsigned pageNum, const Attribute 
         }
     }
 
+    setIndexHeader(pageData, header);
     if (fileHandle.writePage(pageNum, pageData))
         return IX_WRITE_FAILED;
   

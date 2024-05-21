@@ -142,9 +142,16 @@ class IndexManager {
 
         RC findOptimalPage(const Attribute &attr, const void* key, IXFileHandle &fileHandle);
         RC optimalPageHelper(const Attribute &attr, const void* key, IXFileHandle &fileHandle, uint32_t pageNum);
-        void printTreeHelperInt(uint32_t pageNum, uint16_t level, IXFileHandle &ixfileHandle);
-        void printTreeHelperReal(uint32_t pageNum, uint16_t level, IXFileHandle &ixfileHandle);
-        void printTreeHelperVarChar(uint32_t pageNum, uint16_t level, IXFileHandle &ixfileHandle);
+        void printTreeHelperInt(uint32_t pageNum, uint16_t level, IXFileHandle &ixfileHandle) const;
+        void printTreeHelperReal(uint32_t pageNum, uint16_t level, IXFileHandle &ixfileHandle) const;
+        void printTreeHelperVarChar(uint32_t pageNum, uint16_t level, IXFileHandle &ixfileHandle) const;
+
+
+        // all of the const functions to help with print
+        unsigned printGetRootPage(const IXFileHandle &fileHandle) const;
+        IndexHeader printGetIndexHeader(void *pageData) const;
+        IndexDataEntry printGetIndexDataEntry(const void *pageData, const unsigned indexEntryNumber) const;
+        MetaDataHeader printGetMetaDataHeader(const void *pageData) const;
 };
 
 
@@ -194,6 +201,10 @@ class IXFileHandle {
     // Private helper methods
     void setfd(FILE *fd);
     FILE *getfd();
+
+    //const function to help with IndexManager print
+    RC printReadPage(PageNum pageNum, void *data) const;
+    unsigned printGetNumberOfPages() const;
 };
 
 #endif
