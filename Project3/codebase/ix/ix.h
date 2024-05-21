@@ -53,7 +53,7 @@ typedef struct SplitDataEntry
     IndexDataEntry dataEntry;
     bool isTypeVarChar;
     bool isNull;
-    void *data;
+    const void *data;
     RC rc;
 } SplitDataEntry;
 

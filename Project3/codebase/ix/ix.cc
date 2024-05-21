@@ -545,6 +545,7 @@ bool IndexManager::canFitEntry(void *pageData, const Attribute &attr, const void
 
 SplitDataEntry IndexManager::insert(unsigned pageNum, const Attribute &attr, const void *key, const RID &rid, IXFileHandle &fileHandle)
 {
+    // TODO: Double check that we are properly passing the splitEntry.data to key and splitEntry.rid to rid in recursive calls.
     SplitDataEntry splitEntry;
     void *pageData = malloc(PAGE_SIZE);
     if (fileHandle.readPage(pageNum, pageData) != SUCCESS){ // Assuming that IXFileHandle has identical methods as other FileHandle class
@@ -685,7 +686,10 @@ SplitDataEntry IndexManager::splitInternal(void *pageData, unsigned pageNum, con
     uint32_t numNewEntries = ceil(indexHeader.dataEntryNumber / 2) - 1;
 
     SplitDataEntry splitEntry;
-    splitEntry.dataEntry = getIndexDataEntry(pageData, numOldEntries);
+    IndexDataEntry trafficEntry = getIndexDataEntry(pageData, numOldEntries);
+    trafficEntry.rid.pageNum = fileHandle.getNumberOfPages();
+    splitEntry.data = key;
+    splitEntry.dataEntry = trafficEntry; 
     splitEntry.isTypeVarChar = varchar;
     splitEntry.rc = SUCCESS;
     splitEntry.isNull = false;
@@ -843,7 +847,10 @@ SplitDataEntry IndexManager::splitLeaf(void *pageData, unsigned pageNum, const A
     uint32_t numNewEntries = ceil(indexHeader.dataEntryNumber / 2);
 
     SplitDataEntry splitEntry;
-    splitEntry.dataEntry = getIndexDataEntry(pageData, numOldEntries);
+    IndexDataEntry trafficEntry = getIndexDataEntry(pageData, numOldEntries);
+    trafficEntry.rid.pageNum = fileHandle.getNumberOfPages();
+    splitEntry.data = key;
+    splitEntry.dataEntry = trafficEntry; 
     splitEntry.isTypeVarChar = varchar;
     splitEntry.rc = SUCCESS;
     splitEntry.isNull = false;
@@ -874,11 +881,6 @@ SplitDataEntry IndexManager::splitLeaf(void *pageData, unsigned pageNum, const A
         newPageInsert = true;
     }
 
-    // Update the old index header.
-    indexHeader.dataEntryNumber = numOldEntries;
-    unsigned newPageNum = fileHandle.getNumberOfPages();
-    indexHeader.nextSiblingPageNum = newPageNum;
-
     // Prepare the new pages header.
     IndexHeader newHeader;
     newHeader.leaf = true;
@@ -887,6 +889,11 @@ SplitDataEntry IndexManager::splitLeaf(void *pageData, unsigned pageNum, const A
     newHeader.nextSiblingPageNum = indexHeader.nextSiblingPageNum;
     newHeader.leftChildPageNum = 0;
     newHeader.freeSpaceOffset = PAGE_SIZE;
+
+    // Update the old index header.
+    indexHeader.dataEntryNumber = numOldEntries;
+    unsigned newPageNum = fileHandle.getNumberOfPages();
+    indexHeader.nextSiblingPageNum = newPageNum;
 
     setIndexHeader(newPageData, newHeader);
     newPageFromEntries(pageData, newPageData, indexOfFirstEntry, numNewEntries, varchar);
