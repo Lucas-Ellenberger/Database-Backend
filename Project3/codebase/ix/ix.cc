@@ -44,7 +44,7 @@ RC IndexManager::createFile(const string &fileName)
     if (openFile(fileName, ixfileHandle) != SUCCESS) {
         return IX_CREATE_FAILED;
     }
-    /* cerr << "got here" << endl; */
+    // cerr << "got here" << endl;
     // Setting up the header page.
     void * headerPageData = calloc(PAGE_SIZE, 1);
     if (headerPageData == NULL)
@@ -1344,8 +1344,8 @@ RC IndexManager::deleteInLeaf(void *pageData, unsigned pageNum, const Attribute 
     if (attr.type == TypeVarChar) {
         int varcharOffset = entryToDelete.key;
         int varcharLength;
-        memcpy(&varcharLength, (char*)pageData + varcharOffset, sizeof(int));
-        int totalVarcharLength = sizeof(int) + varcharLength;
+        memcpy(&varcharLength, (char*)pageData + varcharOffset, VARCHAR_LENGTH_SIZE);
+        int totalVarcharLength = VARCHAR_LENGTH_SIZE + varcharLength;
 
         // Shift varchar data to cover the deleted entry's varchar data
         char *startOfShift = (char*)pageData + header.freeSpaceOffset;
