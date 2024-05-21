@@ -6,22 +6,23 @@
 
 #include "../rbf/rbfm.h"
 
-# define IX_CREATE_FAILED   10
-# define IX_MALLOC_FAILED   11
-# define IX_OPEN_FAILED     12
-# define IX_APPEND_FAILED   13
-# define IX_READ_FAILED     14
-# define IX_WRITE_FAILED    15
-# define IX_SLOT_DN_EXIST   16
-# define IX_READ_AFTER_DEL  17
-# define IX_NO_SUCH_ATTR    18
-# define IX_LEAF_SPLIT      19
-# define IX_INTERNAL_SPLIT  20
-# define IX_EXISTING_ENTRY  21
-# define IX_FILE_DN_EXIST   22
-# define IX_HANDLE_IN_USE   23
-# define IX_FILE_EXISTS     24
-# define IX_REMOVE_FAILED   25
+# define IX_CREATE_FAILED     10
+# define IX_MALLOC_FAILED     11
+# define IX_OPEN_FAILED       12
+# define IX_APPEND_FAILED     13
+# define IX_READ_FAILED       14
+# define IX_WRITE_FAILED      15
+# define IX_SLOT_DN_EXIST     16
+# define IX_READ_AFTER_DEL    17
+# define IX_NO_SUCH_ATTR      18
+# define IX_LEAF_SPLIT        19
+# define IX_INTERNAL_SPLIT    20
+# define IX_EXISTING_ENTRY    21
+# define IX_FILE_DN_EXIST     22
+# define IX_HANDLE_IN_USE     23
+# define IX_FILE_EXISTS       24
+# define IX_REMOVE_FAILED     25
+# define IX_ROOT_SPLIT_FAILED 26
 
 # define IX_EOF (-1)  // end of the index scan
 
@@ -51,6 +52,7 @@ typedef struct SplitDataEntry
 {
     IndexDataEntry dataEntry;
     bool isTypeVarChar;
+    bool isNull;
     void *data;
     RC rc;
 } SplitDataEntry;
@@ -116,16 +118,18 @@ class IndexManager {
         unsigned getRootPage(IXFileHandle &fileHandle);
         unsigned getChildPageNum(void *pageData, const void *key, const Attribute &attr);
         bool isNonLeaf(void *pageData);
+        bool isValidAttribute(const Attribute &attr);
 
         unsigned getPageFreeSpaceSize(void *pageData);
         bool canFitEntry(void *pageData, const Attribute &attr, const void *key);
 
-        RC insert(const Attribute &attr, const void *key, const RID &rid, IXFileHandle &fileHandle,
-                unsigned pageNum);
+        SplitDataEntry insert(unsigned pageNum, const Attribute &attr, const void *key, const RID &rid, IXFileHandle &fileHandle);
         RC insertInInternal(void *pageData, unsigned pageNum, const Attribute &attr, const void *key, 
                 const RID &rid, IXFileHandle &fileHandle);
         RC insertInLeaf(void *pageData, unsigned pageNum, const Attribute &attr, const void *key,
                 const RID &rid, IXFileHandle &fileHandle);
+
+        RC deleteInLeaf(void *pageData, unsigned pageNum, const Attribute &attr, uint32_t entryNumber, IXFileHandle &fileHandle);
 
         SplitDataEntry splitLeaf(void *pageData, unsigned pageNum, const Attribute &attr, const void *key,
                 const RID &rid, IXFileHandle &fileHandle);
