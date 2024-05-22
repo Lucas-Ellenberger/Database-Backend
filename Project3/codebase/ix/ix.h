@@ -23,6 +23,7 @@
 # define IX_FILE_EXISTS       24
 # define IX_REMOVE_FAILED     25
 # define IX_ROOT_SPLIT_FAILED 26
+# define IX_SCAN_FAILURE      27
 
 # define IX_EOF (-1)  // end of the index scan
 
@@ -53,7 +54,7 @@ typedef struct SplitDataEntry
     IndexDataEntry dataEntry;
     bool isTypeVarChar;
     bool isNull;
-    void *data;
+    const void *data;
     RC rc;
 } SplitDataEntry;
 
@@ -94,6 +95,8 @@ class IndexManager {
 
         // Print the B+ tree in pre-order (in a JSON record format)
         void printBtree(IXFileHandle &ixfileHandle, const Attribute &attribute) const;
+
+        friend class IX_ScanIterator;
 
     protected:
         IndexManager();
@@ -140,14 +143,15 @@ class IndexManager {
         RC compareKey(void *pageData, const void *key, const Attribute &attr, IndexDataEntry &entry);
         bool fileExists(const string &fileName);
 
+        unsigned findLeftmostPage(IXFileHandle &fileHandle);
         RC findOptimalPage(const Attribute &attr, const void* key, IXFileHandle &fileHandle);
         RC optimalPageHelper(const Attribute &attr, const void* key, IXFileHandle &fileHandle, uint32_t pageNum);
+
         void printTreeHelperInt(uint32_t pageNum, uint16_t level, IXFileHandle &ixfileHandle) const;
         void printTreeHelperReal(uint32_t pageNum, uint16_t level, IXFileHandle &ixfileHandle) const;
         void printTreeHelperVarChar(uint32_t pageNum, uint16_t level, IXFileHandle &ixfileHandle) const;
 
-
-        // all of the const functions to help with print
+        // All of the const functions to help with print.
         unsigned printGetRootPage(const IXFileHandle &fileHandle) const;
         IndexHeader printGetIndexHeader(void *pageData) const;
         IndexDataEntry printGetIndexDataEntry(const void *pageData, const unsigned indexEntryNumber) const;
@@ -164,11 +168,33 @@ class IX_ScanIterator {
         // Destructor
         ~IX_ScanIterator();
 
+        RC open(IXFileHandle &fileHandle, const Attribute &attribute, const void *lowKey, const void *highKey,
+                bool lowKeyInclusive, bool highKeyInclusive);
+
         // Get next matching entry
         RC getNextEntry(RID &rid, void *key);
 
         // Terminate index scan
         RC close();
+
+    private:
+        bool checkUpperBound(IndexDataEntry dataEntry);
+        bool checkLowerBound(IndexDataEntry dataEntry);
+
+        IndexManager *_ix;
+
+        IXFileHandle *fileHandle;
+        const Attribute *attr;
+        const void *lowKey;
+        const void *highKey;
+        bool lowKeyInclusive;
+        bool highKeyInclusive;
+
+        void *pageData;
+        IndexHeader *header;
+        unsigned pageNum;
+        unsigned entryNum;
+        IndexDataEntry *returnedEntry;
 };
 
 
