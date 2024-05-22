@@ -175,18 +175,31 @@ RC IndexManager::deleteEntry(IXFileHandle &ixfileHandle, const Attribute &attrib
     int pageNum = findOptimalPage(attribute, key, ixfileHandle);
     void *pageData = malloc(PAGE_SIZE);
     if (ixfileHandle.readPage(pageNum, pageData) != SUCCESS) {
+        free(pageData);
         return IX_READ_FAILED;
     }
 
+    bool found = false;
     IndexHeader header = getIndexHeader(pageData);
     for (uint32_t i = 0; i < header.dataEntryNumber; i++) {
         IndexDataEntry dataEntry = getIndexDataEntry(pageData, i);
         RC value = compareKey(pageData, key, attribute, dataEntry);
         if (value == 0){ // We found data entry!
-            return deleteInLeaf(pageData, pageNum, attribute, i, ixfileHandle);
+            RC res = deleteInLeaf(pageData, pageNum, attribute, i, ixfileHandle);
+            if (res != SUCCESS) {
+                free(pageData);
+                return res;
+            }
+            found = true;
+            header = getIndexHeader(pageData);// Refreshes header
+            i--; // Decrements i to adjust for shift in entries
         }
     }
-    return IX_REMOVE_FAILED; // Couldn't find data entry to delete
+    free(pageData);
+    if (!found) {
+        return IX_REMOVE_FAILED; // Couldn't find data entry to delete
+    }
+    return SUCCESS; // 
 }
 
 
