@@ -38,13 +38,13 @@ RC IndexManager::createFile(const string &fileName)
     FILE *pFile = fopen(fileName.c_str(), "wb");
     if (pFile == NULL)
         return IX_CREATE_FAILED;
+
     fclose(pFile);
 
     IXFileHandle ixfileHandle;
-    if (openFile(fileName, ixfileHandle) != SUCCESS) {
+    if (openFile(fileName, ixfileHandle) != SUCCESS)
         return IX_CREATE_FAILED;
-    }
-    /* cerr << "got here" << endl; */
+
     // Setting up the header page.
     void * headerPageData = calloc(PAGE_SIZE, 1);
     if (headerPageData == NULL)
@@ -52,8 +52,10 @@ RC IndexManager::createFile(const string &fileName)
 
     newHeaderPage(headerPageData);
     // Adds the header data page.
-    if (ixfileHandle.appendPage(headerPageData))
+    if (ixfileHandle.appendPage(headerPageData)) {
+        free(headerPageData);
         return IX_APPEND_FAILED;
+    }
 
     free(headerPageData);
 
@@ -62,8 +64,10 @@ RC IndexManager::createFile(const string &fileName)
         return IX_MALLOC_FAILED;
     
     newInternalPage(firstInternalPageData, 2);
-    if (ixfileHandle.appendPage(firstInternalPageData))
+    if (ixfileHandle.appendPage(firstInternalPageData)) {
+        free(firstInternalPageData);
         return IX_APPEND_FAILED;
+    }
 
     free(firstInternalPageData);
 
@@ -72,8 +76,10 @@ RC IndexManager::createFile(const string &fileName)
         return IX_MALLOC_FAILED;
 
     newLeafPage(firstLeafPage, 0, 0);
-    if (ixfileHandle.appendPage(firstLeafPage))
+    if (ixfileHandle.appendPage(firstLeafPage)) {
+        free(firstLeafPage);
         return IX_APPEND_FAILED;
+    }
     
     free(firstLeafPage);
     closeFile(ixfileHandle);
@@ -409,8 +415,8 @@ RC IX_ScanIterator::open(IXFileHandle &fileHandle, const Attribute &attribute, c
 {
     entryNum = 0;
     pageNum = 0;
-    if (fileHandle.getNumberOfPages() == 0)
-        return SUCCESS;
+    if (fileHandle.fdIsNull())
+        return IX_SCAN_FAILURE;
 
     header = (IndexHeader *)calloc(sizeof(header), 1);
     header->leaf = true;
@@ -553,10 +559,16 @@ IXFileHandle::IXFileHandle()
     ixReadPageCounter = 0;
     ixWritePageCounter = 0;
     ixAppendPageCounter = 0;
+
+    _fd = NULL;
 }
 
 IXFileHandle::~IXFileHandle()
 {
+}
+
+bool IXFileHandle::fdIsNull() {
+    return _fd == NULL;
 }
 
 RC IXFileHandle::collectCounterValues(unsigned &readPageCount, unsigned &writePageCount, unsigned &appendPageCount)
@@ -594,38 +606,40 @@ void IndexManager::newInternalPage(void *pageData, int leftChildPageNum)
 {
     memset(pageData, 0, PAGE_SIZE);
     // Write internal page header.
-    IndexHeader internalHeader;
-    internalHeader.leaf = false;
-    internalHeader.dataEntryNumber = 0;
-    internalHeader.freeSpaceOffset = PAGE_SIZE;
-    internalHeader.leftChildPageNum = leftChildPageNum;
+    IndexHeader* internalHeader = (IndexHeader *)calloc(sizeof(IndexHeader), 1);
+    internalHeader->leaf = false;
+    internalHeader->dataEntryNumber = 0;
+    internalHeader->freeSpaceOffset = PAGE_SIZE;
+    internalHeader->leftChildPageNum = leftChildPageNum;
     // Initialize values, even if they aren't needed.
     // Page num 0 will always be the meta data page, so this is an invalid internal or leaf page.
-    internalHeader.nextSiblingPageNum = 0;
-    internalHeader.prevSiblingPageNum = 0;
-    setIndexHeader(pageData, internalHeader);
+    internalHeader->nextSiblingPageNum = 0;
+    internalHeader->prevSiblingPageNum = 0;
+    setIndexHeader(pageData, *internalHeader);
+    free(internalHeader);
 }
 
 void IndexManager::newLeafPage(void *pageData, int nextSiblingPageNum, int prevSiblingPageNum)
 {
     memset(pageData, 0, PAGE_SIZE);
     // Write Leaf Header struct.
-    IndexHeader newHeader;
-    newHeader.leaf = true;
-    newHeader.dataEntryNumber = 0;
-    newHeader.nextSiblingPageNum = nextSiblingPageNum;
-    newHeader.prevSiblingPageNum = prevSiblingPageNum;
-    newHeader.freeSpaceOffset = PAGE_SIZE;
+    IndexHeader *newHeader = (IndexHeader *)calloc(sizeof(IndexHeader), 1);
+    newHeader->leaf = true;
+    newHeader->dataEntryNumber = 0;
+    newHeader->nextSiblingPageNum = nextSiblingPageNum;
+    newHeader->prevSiblingPageNum = prevSiblingPageNum;
+    newHeader->freeSpaceOffset = PAGE_SIZE;
     // Initialize values, even if they aren't needed.
     // Page num 0 will always be the meta data page, so this is an invalid internal or leaf page.
-    newHeader.leftChildPageNum = 0;
-    setIndexHeader(pageData, newHeader);
+    newHeader->leftChildPageNum = 0;
+    setIndexHeader(pageData, *newHeader);
+    free(newHeader);
 }
 
 void IndexManager::setIndexHeader(void *pageData, IndexHeader indexHeader)
 {
     // Set the index header.
-    memcpy((char *)pageData, &indexHeader, sizeof(IndexHeader));
+    memcpy(pageData, &indexHeader, sizeof(IndexHeader));
 }
 
 IndexHeader IndexManager::getIndexHeader(void *pageData)
@@ -746,7 +760,7 @@ SplitDataEntry IndexManager::insert(unsigned pageNum, const Attribute &attr, con
 unsigned IndexManager::getRootPage(IXFileHandle &fileHandle)
 {
     void *pageData = malloc(PAGE_SIZE);
-    if (fileHandle.readPage(0, pageData) != SUCCESS){ // Assumption that the meta page is on page 0 of the file
+    if (fileHandle.readPage(0, pageData) != SUCCESS) { // Assumption that the meta page is on page 0 of the file
         free(pageData);
         return IX_READ_FAILED;
     }
@@ -1613,9 +1627,13 @@ unsigned IXFileHandle::getNumberOfPages()
 {
     // Use stat to get the file size
     struct stat sb;
+    if (_fd == NULL)
+        cerr << "Somehow we have a null _fd when calling getNumberOfPages!" << endl;
+
     if (fstat(fileno(_fd), &sb) != 0)
         // On error, return 0
         return 0;
+
     // Filesize is always PAGE_SIZE * number of pages
     return sb.st_size / PAGE_SIZE;
 }

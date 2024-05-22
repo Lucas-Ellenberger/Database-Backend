@@ -212,6 +212,7 @@ class IXFileHandle {
     // Destructor
     ~IXFileHandle();
 
+    bool fdIsNull();
 
     RC readPage(PageNum pageNum, void *data);                           // Get a specific page
     RC writePage(PageNum pageNum, const void *data);                    // Write a specific page
@@ -222,7 +223,7 @@ class IXFileHandle {
 
     friend class IndexManager;
     private:
-    FILE *_fd = NULL;
+    FILE *_fd;
 
     // Private helper methods
     void setfd(FILE *fd);
