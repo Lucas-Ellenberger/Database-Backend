@@ -1725,11 +1725,9 @@ RC IndexManager::deleteInLeaf(void *pageData, unsigned pageNum, const Attribute 
 
     setIndexHeader(pageData, header);
     if (fileHandle.writePage(pageNum, pageData)) {
-        free(pageData);
         return IX_WRITE_FAILED;
     }
   
-    free(pageData);
     return SUCCESS;
 }
 
