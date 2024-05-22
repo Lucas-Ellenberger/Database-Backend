@@ -55,6 +55,9 @@ int testCase_14(const string &indexFileName,
         prepareKeyAndRid(count, i, key, rid);
 
         rc = indexManager->insertEntry(ixfileHandle, attribute, &key, rid);
+        if (rc != SUCCESS)
+            cerr << "Bad error code of: " << rc << endl;
+
         assert(rc == success && "indexManager::insertEntry() should not fail.");
 
         if (i == 5) {
