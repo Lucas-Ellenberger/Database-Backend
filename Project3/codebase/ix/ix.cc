@@ -907,9 +907,9 @@ void IndexManager::insert(unsigned pageNum, const Attribute &attr, const void *k
 
         if (splitEntry->rc == IX_LEAF_SPLIT) {
             if (splitEntry->isTypeVarChar) {
-                splitLeaf(pageData, pageNum, attr, splitEntry->key, splitEntry->dataEntry.rid, fileHandle, splitEntry);
+                splitLeaf(pageData, pageNum, attr, key, rid, fileHandle, splitEntry);
             } else {
-                splitLeaf(pageData, pageNum, attr, &splitEntry->dataEntry.key, splitEntry->dataEntry.rid, fileHandle, splitEntry);
+                splitLeaf(pageData, pageNum, attr, key, rid, fileHandle, splitEntry);
             }
             return;
         }
@@ -1205,6 +1205,8 @@ void IndexManager::splitLeaf(void *pageData, unsigned pageNum, const Attribute &
     } else {
         newPageInsert = true;
     }
+    /* cerr << (newPageInsert ? "true" : "false") << endl; */
+    /* cerr << "firstEntry: (" << firstEntry.rid.pageNum << ", " << firstEntry.rid.slotNum << ")" << endl; */
 
     // Prepare the new pages header.
     IndexHeader newHeader;
@@ -1223,9 +1225,16 @@ void IndexManager::splitLeaf(void *pageData, unsigned pageNum, const Attribute &
     setIndexHeader(newPageData, newHeader);
     newPageFromEntries(pageData, newPageData, indexOfFirstEntry, numNewEntries, varchar);
     fileHandle.appendPage(newPageData);
+    /* cerr << "before:" << endl; */
+    /* pageDataPrinter(newPageData); */
     if (newPageInsert)
         insertInLeaf(newPageData, newPageNum, attr, key, rid, fileHandle);
 
+    // TODO: delete line below!
+    /* fileHandle.readPage(newPageNum, newPageData); */
+    /* cerr << "after:" << endl; */
+    /* pageDataPrinter(newPageData); */
+    
     // Update the prevSiblingPageNum of the old nextSiblingPageNum.
     if (newHeader.nextSiblingPageNum != 0) {
         memset(newPageData, 0, PAGE_SIZE);
@@ -1246,8 +1255,10 @@ void IndexManager::splitLeaf(void *pageData, unsigned pageNum, const Attribute &
     memset(newPageData, 0, PAGE_SIZE);
     setIndexHeader(newPageData, indexHeader);
     newPageFromEntries(pageData, newPageData, 0, numOldEntries, varchar);
+    // TODO: There is a possibility we write the traffic cop entry into the leaf page as well!.
     if (!newPageInsert)
         insertInLeaf(newPageData, pageNum, attr, key, rid, fileHandle);
+
 
     if (fileHandle.writePage(pageNum, newPageData)) {
         splitEntry->isNull = true;
@@ -1257,7 +1268,18 @@ void IndexManager::splitLeaf(void *pageData, unsigned pageNum, const Attribute &
 
     free(newPageData);
     splitEntry->dataEntry = trafficEntry;
-    /* cerr << "splitEntry->dataEntry.rid.pageNum: " << splitEntry->dataEntry.rid.pageNum << endl; */
+}
+
+void IndexManager::pageDataPrinter(void *pageData)
+{
+    IndexHeader header = getIndexHeader(pageData);
+    cerr << "Header.dataEntryNumber: " << header.dataEntryNumber << endl;
+    IndexDataEntry dataEntry;
+    for (unsigned i = 0; i < header.dataEntryNumber; i++) {
+        dataEntry = getIndexDataEntry(pageData, i);
+        cerr << dataEntry.key << ": (" << dataEntry.rid.pageNum << ", " << dataEntry.rid.slotNum << ") ";
+    }
+    cerr << endl;
 }
 
 // returns page number of first leaf page to look at for possible value 
