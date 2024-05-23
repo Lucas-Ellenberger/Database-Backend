@@ -1118,9 +1118,6 @@ RC IndexManager::insertInLeaf(void *pageData, unsigned pageNum, const Attribute 
         return IX_LEAF_SPLIT;
 
     IndexHeader header = getIndexHeader(pageData);
-    if(rid.pageNum == 338) {
-        cerr << "338 exists" << endl;
-    }
     // Prepare the new data entry and write var char if necessary.
     IndexDataEntry newDataEntry;
     newDataEntry.rid = rid;
@@ -1593,10 +1590,12 @@ RC IndexManager::optimalPageHelper(const Attribute &attr, const void* key, IXFil
 // }
 
 RC IndexManager::compareKey(void* pageData, const void* key, const Attribute &attr, IndexDataEntry &entry) {
+    if (key == NULL)
+    	cerr << "cry!" << endl;
     switch(attr.type) {
         case TypeInt:
-            if (key == NULL)
-                cerr << "cry!" << endl;
+            /* if (key == NULL) */
+            /*     cerr << "cry!" << endl; */
             int32_t key_val_int;
             memcpy(&key_val_int, key, 4);
             if (key_val_int < entry.key){
@@ -1610,12 +1609,14 @@ RC IndexManager::compareKey(void* pageData, const void* key, const Attribute &at
             }
             break;
         case TypeReal:
-            float key_val;
-            memcpy(&key_val, key, 4);
-            if (key_val < entry.key){
+			float key_val;
+            float entry_val;
+            memcpy(&key_val, key, sizeof(float));
+            memcpy(&entry_val, &(entry.key), sizeof(float));
+            if (key_val < entry_val){
                 return -1;
             }
-            else if (key_val > entry.key) {
+            else if (key_val > entry_val) {
                 return 1;
             }
             else {
