@@ -879,6 +879,10 @@ void IndexManager::insert(unsigned pageNum, const Attribute &attr, const void *k
         }
         
         insert(childPageNum, attr, key, rid, fileHandle, splitEntry);
+        // void* thispage = calloc(PAGE_SIZE, 1);
+        // fileHandle.readPage(pageNum, thispage);
+        // cerr << "printing internal page" << endl;
+        // pageDataPrinter(thispage);
         if (splitEntry->rc != SUCCESS)
             return;
 
@@ -1004,6 +1008,10 @@ void IndexManager::splitInternal(void *pageData, unsigned pageNum, const Attribu
     // Get half of the entries for the new page.
     uint32_t numNewEntries = ceil(indexHeader.dataEntryNumber / 2) - 1;
 
+    
+
+
+
     IndexDataEntry trafficEntry = getIndexDataEntry(pageData, numOldEntries);
     uint32_t trafficEntryOldPageNum = trafficEntry.rid.pageNum;
     trafficEntry.rid.pageNum = fileHandle.getNumberOfPages();
@@ -1055,6 +1063,7 @@ void IndexManager::splitInternal(void *pageData, unsigned pageNum, const Attribu
     newHeader.leftChildPageNum = trafficEntryOldPageNum;
     newHeader.freeSpaceOffset = PAGE_SIZE;
 
+    cerr << "num new entries" << numNewEntries << endl;
     setIndexHeader(newPageData, newHeader);
     newPageFromEntries(pageData, newPageData, indexOfFirstEntry, numNewEntries, varchar);
     /* IndexDataEntry newDataEntry = getIndexDataEntry(pageData, 0); */
@@ -1100,7 +1109,9 @@ RC IndexManager::insertInLeaf(void *pageData, unsigned pageNum, const Attribute 
         return IX_LEAF_SPLIT;
 
     IndexHeader header = getIndexHeader(pageData);
-
+    if(rid.pageNum == 338) {
+        cerr << "338 exists" << endl;
+    }
     // Prepare the new data entry and write var char if necessary.
     IndexDataEntry newDataEntry;
     newDataEntry.rid = rid;
@@ -1153,6 +1164,9 @@ RC IndexManager::insertInLeaf(void *pageData, unsigned pageNum, const Attribute 
 void IndexManager::splitLeaf(void *pageData, unsigned pageNum, const Attribute &attr, const void *key,
         const RID &rid, IXFileHandle &fileHandle, SplitDataEntry *splitEntry)
 {
+    cerr << "page before we split:" <<endl;
+    pageDataPrinter(pageData);
+
     if (key == NULL)
         cerr << "what is this code!" << endl;
     /* cerr << "split leaf page num: " << pageNum << endl; */
@@ -1166,7 +1180,10 @@ void IndexManager::splitLeaf(void *pageData, unsigned pageNum, const Attribute &
     uint32_t numOldEntries = floor(indexHeader.dataEntryNumber / 2);
     unsigned indexOfFirstEntry = numOldEntries;
     // Get half of the entries for the new page.
-    uint32_t numNewEntries = ceil(indexHeader.dataEntryNumber / 2);
+    uint32_t numNewEntries = ceil(indexHeader.dataEntryNumber / 2)  + 1;
+
+    cerr << "num old entries: " <<numOldEntries << endl << "index of first entry: " << indexOfFirstEntry << endl;
+    cerr << "num new entries: " << numNewEntries << endl;
 
     IndexDataEntry trafficEntry = getIndexDataEntry(pageData, numOldEntries);
     uint32_t trafficEntryOldPageNum = trafficEntry.rid.pageNum;
@@ -1224,16 +1241,20 @@ void IndexManager::splitLeaf(void *pageData, unsigned pageNum, const Attribute &
 
     setIndexHeader(newPageData, newHeader);
     newPageFromEntries(pageData, newPageData, indexOfFirstEntry, numNewEntries, varchar);
+    cerr << "printing before appending the page" << endl;
+    pageDataPrinter(newPageData);
     fileHandle.appendPage(newPageData);
-    /* cerr << "before:" << endl; */
-    /* pageDataPrinter(newPageData); */
+    cerr << "before:" << endl;
+    pageDataPrinter(newPageData);
     if (newPageInsert)
         insertInLeaf(newPageData, newPageNum, attr, key, rid, fileHandle);
 
+    
+
     // TODO: delete line below!
-    /* fileHandle.readPage(newPageNum, newPageData); */
-    /* cerr << "after:" << endl; */
-    /* pageDataPrinter(newPageData); */
+    fileHandle.readPage(newPageNum, newPageData);
+    cerr << "after:" << endl;
+    pageDataPrinter(newPageData);
     
     // Update the prevSiblingPageNum of the old nextSiblingPageNum.
     if (newHeader.nextSiblingPageNum != 0) {
@@ -1254,12 +1275,15 @@ void IndexManager::splitLeaf(void *pageData, unsigned pageNum, const Attribute &
     // Restructure the current page data by writing the information into the temp page.
     memset(newPageData, 0, PAGE_SIZE);
     setIndexHeader(newPageData, indexHeader);
+    cerr << "printing page data before new page from entries for old page" << endl;
+    pageDataPrinter(pageData);
     newPageFromEntries(pageData, newPageData, 0, numOldEntries, varchar);
     // TODO: There is a possibility we write the traffic cop entry into the leaf page as well!.
     if (!newPageInsert)
         insertInLeaf(newPageData, pageNum, attr, key, rid, fileHandle);
 
-
+    cerr << "old page from split" << endl;
+    pageDataPrinter(newPageData);
     if (fileHandle.writePage(pageNum, newPageData)) {
         splitEntry->isNull = true;
         splitEntry->rc = IX_WRITE_FAILED;
