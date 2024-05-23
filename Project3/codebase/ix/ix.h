@@ -126,7 +126,8 @@ class IndexManager {
         unsigned getPageFreeSpaceSize(void *pageData);
         bool canFitEntry(void *pageData, const Attribute &attr, const void *key);
 
-        SplitDataEntry insert(unsigned pageNum, const Attribute &attr, const void *key, const RID &rid, IXFileHandle &fileHandle);
+        void insert(unsigned pageNum, const Attribute &attr, const void *key, const RID &rid, IXFileHandle &fileHandle,
+                SplitDataEntry *splitEntry);
         RC insertInInternal(void *pageData, unsigned pageNum, const Attribute &attr, const void *key, 
                 const RID &rid, IXFileHandle &fileHandle);
         RC insertInLeaf(void *pageData, unsigned pageNum, const Attribute &attr, const void *key,
@@ -134,10 +135,10 @@ class IndexManager {
 
         RC deleteInLeaf(void *pageData, unsigned pageNum, const Attribute &attr, uint32_t entryNumber, IXFileHandle &fileHandle);
 
-        SplitDataEntry splitLeaf(void *pageData, unsigned pageNum, const Attribute &attr, const void *key,
-                const RID &rid, IXFileHandle &fileHandle);
-        SplitDataEntry splitInternal(void *pageData, unsigned pageNum, const Attribute &attr, const void *key,
-                const RID &rid, IXFileHandle &fileHandle);
+        void splitLeaf(void *pageData, unsigned pageNum, const Attribute &attr, const void *key,
+                const RID &rid, IXFileHandle &fileHandle, SplitDataEntry *splitEntry);
+        void splitInternal(void *pageData, unsigned pageNum, const Attribute &attr, const void *key,
+                const RID &rid, IXFileHandle &fileHandle, SplitDataEntry *splitEntry);
         void newPageFromEntries(void *oldPageData, void *newPageData, uint32_t startEntry, uint32_t numEntries, bool isTypeVarChar);
 
         RC compareKey(void *pageData, const void *key, const Attribute &attr, IndexDataEntry &entry);
