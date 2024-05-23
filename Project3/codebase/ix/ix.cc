@@ -143,6 +143,9 @@ RC IndexManager::insertEntry(IXFileHandle &ixfileHandle, const Attribute &attrib
     unsigned rootPageNum = getRootPage(ixfileHandle); 
     // Will recursively walk down tree until it finds leaf page to insert
     SplitDataEntry *splitEntry = new SplitDataEntry;
+    splitEntry->isTypeVarChar = (attribute.type == TypeVarChar);
+    splitEntry->isNull = true;
+    splitEntry->key = calloc(PAGE_SIZE, 1);
     insert(rootPageNum, attribute, key, rid, ixfileHandle, splitEntry);
     if (splitEntry->rc != SUCCESS)
         return splitEntry->rc;
@@ -152,6 +155,7 @@ RC IndexManager::insertEntry(IXFileHandle &ixfileHandle, const Attribute &attrib
         // We will insert the new data entry as the first entry in our new root page.
         void *pageData = calloc(PAGE_SIZE, 1);
         if (pageData == NULL) {
+            free(splitEntry->key);
             delete(splitEntry);
             return IX_MALLOC_FAILED;
         }
@@ -163,6 +167,7 @@ RC IndexManager::insertEntry(IXFileHandle &ixfileHandle, const Attribute &attrib
         // Insert the entry to the page that split from the root.
         splitEntry->rc = insertInInternal(pageData, newRootPageNum, attribute, splitEntry->key, splitEntry->dataEntry.rid, ixfileHandle);
         if (splitEntry->rc != SUCCESS) {
+            free(splitEntry->key);
             delete(splitEntry);
             return IX_ROOT_SPLIT_FAILED;
         }
@@ -173,11 +178,12 @@ RC IndexManager::insertEntry(IXFileHandle &ixfileHandle, const Attribute &attrib
         memset(pageData, 0, PAGE_SIZE);
         setMetaDataHeader(pageData, metaHeader);
         if (ixfileHandle.writePage(0, pageData)) {
+            free(splitEntry->key);
             delete(splitEntry);
             return IX_WRITE_FAILED;
         }
     }
-
+    free(splitEntry->key);
     delete(splitEntry);
     return SUCCESS;
 }
@@ -1138,6 +1144,14 @@ RC IndexManager::insertInLeaf(void *pageData, unsigned pageNum, const Attribute 
     uint32_t entryNum = 0;
     uint32_t i;
     IndexDataEntry dataEntry;
+    if (key == NULL) {
+        cerr << "ruh roh raggy" << endl;
+    }
+    // if (attr.type == TypeReal) {
+    //     float value_of_key;
+    //     memcpy(&value_of_key, key, sizeof(float));
+    //     // cerr << "key value: " << value_of_key << endl;
+    // }
     for (i = 0; i < header.dataEntryNumber; i++) {
         // Iteratively compare key until we find it's slot.
         dataEntry = getIndexDataEntry(pageData, i);
@@ -1192,20 +1206,29 @@ void IndexManager::splitLeaf(void *pageData, unsigned pageNum, const Attribute &
     // cerr << "num new entries: " << numNewEntries << endl;
 
     IndexDataEntry trafficEntry = getIndexDataEntry(pageData, numOldEntries);
+    // pageDataPrinter(pageData);
+    // cerr << "traffic cop is from entry " << numOldEntries << endl;
+    // cerr  << "traffic key" << trafficEntry.key << endl;
     uint32_t trafficEntryOldPageNum = trafficEntry.rid.pageNum;
     /* cerr << "We are trying to pass a traffic entry with pageNum: " << fileHandle.getNumberOfPages() << endl; */
     trafficEntry.rid.pageNum = fileHandle.getNumberOfPages();
-    splitEntry->key = &trafficEntry.key;
+    
     splitEntry->dataEntry = trafficEntry; 
     splitEntry->isTypeVarChar = varchar;
     splitEntry->rc = SUCCESS;
     splitEntry->isNull = false;
+    if(attr.type == TypeInt) {
+        memcpy(splitEntry->key, &(trafficEntry.key), INT_SIZE);
+    }
+    if (attr.type == TypeReal) {
+        memcpy(splitEntry->key, &(trafficEntry.key), REAL_SIZE);
+    }
     if (varchar) {
         int length;
         memcpy(&length, (char *)pageData + splitEntry->dataEntry.key, sizeof(int));
         int totalLength = sizeof(int) + length;
         // TODO: calloc once per splitEntry!
-        splitEntry->key = calloc(totalLength, 1);
+        // splitEntry->key = calloc(totalLength, 1);
         memcpy((char *)splitEntry->key, (char *)pageData + splitEntry->dataEntry.key, totalLength);
     }
     /* } else { */
@@ -1612,6 +1635,8 @@ RC IndexManager::compareKey(void* pageData, const void* key, const Attribute &at
 			float key_val;
             float entry_val;
             memcpy(&key_val, key, sizeof(float));
+            // cerr << "val of key " << *(float*)key << endl;
+            // cerr << "val of keyval" << key_val <<endl;
             memcpy(&entry_val, &(entry.key), sizeof(float));
             if (key_val < entry_val){
                 return -1;
