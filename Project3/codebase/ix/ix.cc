@@ -1072,7 +1072,7 @@ void IndexManager::splitInternal(void *pageData, unsigned pageNum, const Attribu
     newHeader.leftChildPageNum = trafficEntryOldPageNum;
     newHeader.freeSpaceOffset = PAGE_SIZE;
 
-    cerr << "num new entries" << numNewEntries << endl;
+    /* cerr << "num new entries" << numNewEntries << endl; */
     setIndexHeader(newPageData, newHeader);
     newPageFromEntries(pageData, newPageData, indexOfFirstEntry, numNewEntries, varchar);
     /* IndexDataEntry newDataEntry = getIndexDataEntry(pageData, 0); */
