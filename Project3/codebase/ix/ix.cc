@@ -627,17 +627,21 @@ RC IX_ScanIterator::getNextEntry(RID &rid, void *key)
 {
     if (pageNum == 0)
         return IX_EOF;
-    cerr << "current page num " << pageNum << endl;
-    cerr << this->fileHandle->getNumberOfPages() << endl;
+    /* cerr << "current page num " << pageNum << endl; */
+    /* cerr << this->fileHandle->getNumberOfPages() << endl; */
     IndexDataEntry dataEntry = _ix->getIndexDataEntry(pageData, entryNum);
     if ((returnedEntry->rid.pageNum == dataEntry.rid.pageNum) && (returnedEntry->rid.slotNum == dataEntry.rid.slotNum)) {
         entryNum++;
-        cerr << "got here" << endl;
+        /* cerr << "got here" << endl; */
     }
     
+    /* cerr << "entryNum: " << entryNum << endl; */
+    /* cerr << "header->dataEntryNumber: " << header->dataEntryNumber << endl; */
+    /* _ix->pageDataPrinter(pageData); */
     while (true) {
         for ( ; entryNum < header->dataEntryNumber; entryNum++) {
             dataEntry = _ix->getIndexDataEntry(pageData, entryNum);
+            /* cerr << "dataEntry.key: " << dataEntry.key << endl; */
             if (!checkUpperBound(dataEntry))
                 return IX_EOF;
 
@@ -663,14 +667,14 @@ RC IX_ScanIterator::getNextEntry(RID &rid, void *key)
                     default:
                         break;
                 }
-                cerr << "got to return success inside of getNext Entry" << endl;
+                /* cerr << "got to return success inside of getNext Entry" << endl; */
                 rid = returnedEntry->rid;
                 return SUCCESS;
             }
         }
 
         pageNum = header->nextSiblingPageNum;
-        cerr << "pagenum of getnext entry: " << pageNum << endl;
+        /* cerr << "pagenum of getnext entry: " << pageNum << endl; */
         if (pageNum == 0)
             return IX_EOF;
 
@@ -702,7 +706,7 @@ bool IX_ScanIterator::checkUpperBound(IndexDataEntry dataEntry)
     if (highKey == NULL)
         return true;
 
-    unsigned result = _ix->compareKey(pageData, highKey, *attr, dataEntry);
+    RC result = _ix->compareKey(pageData, highKey, *attr, dataEntry);
     if (highKeyInclusive)
         return result >= 0;
     else
@@ -714,7 +718,9 @@ bool IX_ScanIterator::checkLowerBound(IndexDataEntry dataEntry)
     if (lowKey == NULL)
         return true;
 
-    unsigned result = _ix->compareKey(pageData, lowKey, *attr, dataEntry);
+    /* cerr << "checkLowerBound: lowKey: " << *(int *)lowKey << endl; */
+    RC result = _ix->compareKey(pageData, lowKey, *attr, dataEntry);
+    /* cerr << "compareKey: result: " << result << endl; */
     if (lowKeyInclusive)
         return result <= 0;
     else
