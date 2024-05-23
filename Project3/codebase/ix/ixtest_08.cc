@@ -79,6 +79,9 @@ int testCase_8(const string &indexFileName, const Attribute &attribute)
         }
         if (rid.pageNum < value || rid.slotNum < value * 3)
         {
+            cerr << "expected values for " << endl;
+            cerr << "rid.pageNum >=" << value << "and received " << rid.pageNum <<endl;
+            cerr << "rid.slotNum >=" << (value * 3) << "and received " << rid.slotNum <<endl;
             cerr << "Wrong entries output... The test failed" << endl;
             rc = ix_ScanIterator.close();
             rc = indexManager->closeFile(ixfileHandle);
@@ -87,10 +90,14 @@ int testCase_8(const string &indexFileName, const Attribute &attribute)
         }
         outRidSlotNumSum += rid.slotNum;
     }
-
+    cerr << "scan did " << count << " many iterations" << endl;
+    cerr << "scan did not fail" <<endl;
     // Inconsistency check
     if (inRidSlotNumSum != outRidSlotNumSum)
     {
+        cerr << "failed inconsistency check" <<endl;
+        cerr << "inRidSlotNumSum = " << inRidSlotNumSum <<endl;
+        cerr << "must equal outRidSlotNumSum which is " << outRidSlotNumSum <<endl;
         cerr << "Wrong entries output... The test failed" << endl;
         rc = ix_ScanIterator.close();
         rc = indexManager->closeFile(ixfileHandle);
