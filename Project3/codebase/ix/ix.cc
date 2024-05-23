@@ -161,7 +161,7 @@ RC IndexManager::insertEntry(IXFileHandle &ixfileHandle, const Attribute &attrib
         newInternalPage(pageData, rootPageNum);
         ixfileHandle.appendPage(pageData);
         // Insert the entry to the page that split from the root.
-        splitEntry->rc = insertInInternal(pageData, newRootPageNum, attribute, splitEntry->data, splitEntry->dataEntry.rid, ixfileHandle);
+        splitEntry->rc = insertInInternal(pageData, newRootPageNum, attribute, splitEntry->key, splitEntry->dataEntry.rid, ixfileHandle);
         if (splitEntry->rc != SUCCESS) {
             delete(splitEntry);
             return IX_ROOT_SPLIT_FAILED;
@@ -885,14 +885,15 @@ void IndexManager::insert(unsigned pageNum, const Attribute &attr, const void *k
         if (!splitEntry->isNull) {
             // This will be called at every backtrack level until we find space to insert.
             /* cerr << "insert: splitEntry" */
-            splitEntry->rc = insertInInternal(pageData, pageNum, attr, key, splitEntry->dataEntry.rid, fileHandle);
+            // TODO: ERROR PRONE AREA!!!
+            splitEntry->rc = insertInInternal(pageData, pageNum, attr, splitEntry->key, splitEntry->dataEntry.rid, fileHandle);
             if ((splitEntry->rc != SUCCESS) && (splitEntry->rc != IX_INTERNAL_SPLIT)) {
                 splitEntry->isNull = true;
                 return;
             }
 
             if (splitEntry->rc == IX_INTERNAL_SPLIT){
-                splitInternal(pageData, pageNum, attr, key, splitEntry->dataEntry.rid, fileHandle, splitEntry);
+                splitInternal(pageData, pageNum, attr, splitEntry->key, splitEntry->dataEntry.rid, fileHandle, splitEntry);
                 return;
             }
         }
@@ -905,7 +906,11 @@ void IndexManager::insert(unsigned pageNum, const Attribute &attr, const void *k
         }
 
         if (splitEntry->rc == IX_LEAF_SPLIT) {
-            splitLeaf(pageData, pageNum, attr, key, splitEntry->dataEntry.rid, fileHandle, splitEntry);
+            if (splitEntry->isTypeVarChar) {
+                splitLeaf(pageData, pageNum, attr, splitEntry->key, splitEntry->dataEntry.rid, fileHandle, splitEntry);
+            } else {
+                splitLeaf(pageData, pageNum, attr, &splitEntry->dataEntry.key, splitEntry->dataEntry.rid, fileHandle, splitEntry);
+            }
             return;
         }
 
@@ -1002,7 +1007,7 @@ void IndexManager::splitInternal(void *pageData, unsigned pageNum, const Attribu
     IndexDataEntry trafficEntry = getIndexDataEntry(pageData, numOldEntries);
     uint32_t trafficEntryOldPageNum = trafficEntry.rid.pageNum;
     trafficEntry.rid.pageNum = fileHandle.getNumberOfPages();
-    splitEntry->data = key;
+    splitEntry->key = &trafficEntry.key;
     splitEntry->dataEntry = trafficEntry; 
     splitEntry->isTypeVarChar = varchar;
     splitEntry->rc = SUCCESS;
@@ -1011,11 +1016,12 @@ void IndexManager::splitInternal(void *pageData, unsigned pageNum, const Attribu
         int length;
         memcpy(&length, (char *)pageData + splitEntry->dataEntry.key, sizeof(int));
         int totalLength = sizeof(int) + length;
-        splitEntry->data = calloc(totalLength, 1);
-        memcpy((char *)splitEntry->data, (char *)pageData + splitEntry->dataEntry.key, totalLength);
-    } else {
-        splitEntry->data = NULL;
+        splitEntry->key = calloc(totalLength, 1);
+        memcpy((char *)splitEntry->key , (char *)pageData + splitEntry->dataEntry.key, totalLength);
     }
+    /* else { */
+    /*     splitEntry->key = NULL; */
+    /* } */
 
     void *newPageData = calloc(PAGE_SIZE, 1);
     if (newPageData == NULL) {
@@ -1147,6 +1153,8 @@ RC IndexManager::insertInLeaf(void *pageData, unsigned pageNum, const Attribute 
 void IndexManager::splitLeaf(void *pageData, unsigned pageNum, const Attribute &attr, const void *key,
         const RID &rid, IXFileHandle &fileHandle, SplitDataEntry *splitEntry)
 {
+    if (key == NULL)
+        cerr << "what is this code!" << endl;
     /* cerr << "split leaf page num: " << pageNum << endl; */
     /* cerr << "We have: " << fileHandle.getNumberOfPages() << " num pages." << endl; */
     bool varchar = false;
@@ -1164,7 +1172,7 @@ void IndexManager::splitLeaf(void *pageData, unsigned pageNum, const Attribute &
     uint32_t trafficEntryOldPageNum = trafficEntry.rid.pageNum;
     /* cerr << "We are trying to pass a traffic entry with pageNum: " << fileHandle.getNumberOfPages() << endl; */
     trafficEntry.rid.pageNum = fileHandle.getNumberOfPages();
-    splitEntry->data = key;
+    splitEntry->key = &trafficEntry.key;
     splitEntry->dataEntry = trafficEntry; 
     splitEntry->isTypeVarChar = varchar;
     splitEntry->rc = SUCCESS;
@@ -1173,8 +1181,9 @@ void IndexManager::splitLeaf(void *pageData, unsigned pageNum, const Attribute &
         int length;
         memcpy(&length, (char *)pageData + splitEntry->dataEntry.key, sizeof(int));
         int totalLength = sizeof(int) + length;
-        splitEntry->data = calloc(totalLength, 1);
-        memcpy((char *)splitEntry->data, (char *)pageData + splitEntry->dataEntry.key, totalLength);
+        // TODO: calloc once per splitEntry!
+        splitEntry->key = calloc(totalLength, 1);
+        memcpy((char *)splitEntry->key, (char *)pageData + splitEntry->dataEntry.key, totalLength);
     }
     /* } else { */
         /* splitEntry->data = NULL; */
@@ -1531,6 +1540,8 @@ RC IndexManager::optimalPageHelper(const Attribute &attr, const void* key, IXFil
 RC IndexManager::compareKey(void* pageData, const void* key, const Attribute &attr, IndexDataEntry &entry) {
     switch(attr.type) {
         case TypeInt:
+            if (key == NULL)
+                cerr << "cry!" << endl;
             int32_t key_val_int;
             memcpy(&key_val_int, key, 4);
             if (key_val_int < entry.key){
