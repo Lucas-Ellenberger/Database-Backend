@@ -133,6 +133,7 @@ class IndexManager {
         RC insertInLeaf(void *pageData, unsigned pageNum, const Attribute &attr, const void *key,
                 const RID &rid, IXFileHandle &fileHandle);
 
+        RC deleteHelper(IXFileHandle &ixfileHandle, const Attribute &attribute, const void *key, const RID &rid, unsigned pageNum, bool found);
         RC deleteInLeaf(void *pageData, unsigned pageNum, const Attribute &attr, uint32_t entryNumber, IXFileHandle &fileHandle);
 
         void splitLeaf(void *pageData, unsigned pageNum, const Attribute &attr, const void *key,
