@@ -199,12 +199,19 @@ RC IndexManager::deleteEntry(IXFileHandle &ixfileHandle, const Attribute &attrib
         return IX_NO_SUCH_ATTR;
     }
 
+    int curr = *(int *)key;
+    if (curr == 57465)
+        cerr << "deleteEntry: trying to delete entry with key: " << *(int *)key << " (" << rid.pageNum << ", " << rid.slotNum << ")" << endl;
+
     int pageNum = findOptimalPage(attribute, key, ixfileHandle);
     void *pageData = malloc(PAGE_SIZE);
     if (ixfileHandle.readPage(pageNum, pageData) != SUCCESS) {
         free(pageData);
         return IX_READ_FAILED;
     }
+    
+    if (curr == 57465)
+        pageDataPrinter(pageData);
 
     bool found = false;
     IndexHeader header = getIndexHeader(pageData);
@@ -222,14 +229,82 @@ RC IndexManager::deleteEntry(IXFileHandle &ixfileHandle, const Attribute &attrib
             header = getIndexHeader(pageData);// Refreshes header
             i--; // Decrements i to adjust for shift in entries
         }
+
+        if (value < 0) {
+            if (*(int *)key == 57465) {
+                cerr << "passed key: " << *(int *)key << endl;
+                cerr << "dataEntry key: " << dataEntry.key << endl;
+            }
+
+            /* cerr << "broke in main delete" << endl; */
+            free(pageData);
+            if (!found)
+                return IX_REMOVE_FAILED;
+            else
+                return SUCCESS;
+        }
     }
 
     free(pageData);
-    if (!found) {
-        return IX_REMOVE_FAILED; // Couldn't find data entry to delete
+    if (*(int *)key == 57465)
+        cerr << "can we move on to next page of: " << header.nextSiblingPageNum << endl;
+
+    if ((header.nextSiblingPageNum == 0) && (!found))
+        return IX_REMOVE_FAILED;
+
+    return deleteHelper(ixfileHandle, attribute, key, rid, header.nextSiblingPageNum, found);
+}
+
+RC IndexManager::deleteHelper(IXFileHandle &ixfileHandle, const Attribute &attribute, const void *key, const RID &rid, unsigned pageNum, bool found)
+{
+    void *pageData = malloc(PAGE_SIZE);
+    if (pageData == NULL)
+        return IX_MALLOC_FAILED;
+
+    if (ixfileHandle.readPage(pageNum, pageData) != SUCCESS) {
+        free(pageData);
+        return IX_READ_FAILED;
     }
 
-    return SUCCESS; // 
+    IndexHeader header = getIndexHeader(pageData);
+    for (uint32_t i = 0; i < header.dataEntryNumber; i++) {
+        IndexDataEntry dataEntry = getIndexDataEntry(pageData, i);
+        RC value = compareKey(pageData, key, attribute, dataEntry);
+        if (value == 0) { // We found data entry!
+            RC res = deleteInLeaf(pageData, pageNum, attribute, i, ixfileHandle);
+            if (res != SUCCESS) {
+                free(pageData);
+                return res;
+            }
+
+            found = true;
+            header = getIndexHeader(pageData);// Refreshes header
+            i--; // Decrements i to adjust for shift in entries
+        }
+
+        if (value < 0) {
+            if (*(int *)key == 57465) {
+                cerr << "passed key: " << *(int *)key << endl;
+                cerr << "dataEntry key: " << dataEntry.key << endl;
+                pageDataPrinter(pageData);
+            }
+            
+            free(pageData);
+            if (!found)
+                return IX_REMOVE_FAILED;
+            else
+                return SUCCESS;
+        }
+    }
+
+    free(pageData);
+    if (*(int *)key == 57465)
+        cerr << "can we move on to next page of: " << header.nextSiblingPageNum << endl;
+
+    if ((header.nextSiblingPageNum == 0) && (!found))
+        return IX_REMOVE_FAILED;
+
+    return deleteHelper(ixfileHandle, attribute, key, rid, header.nextSiblingPageNum, found);
 }
 
 unsigned IndexManager::findLeftmostPage(IXFileHandle &fileHandle) {
@@ -1359,7 +1434,7 @@ void IndexManager::splitLeaf(void *pageData, unsigned pageNum, const Attribute &
 void IndexManager::pageDataPrinter(void *pageData)
 {
     IndexHeader header = getIndexHeader(pageData);
-    cerr << "Header.dataEntryNumber: " << header.dataEntryNumber << endl;
+    /* cerr << "Header.dataEntryNumber: " << header.dataEntryNumber << endl; */
     IndexDataEntry dataEntry;
     for (unsigned i = 0; i < header.dataEntryNumber; i++) {
         dataEntry = getIndexDataEntry(pageData, i);
@@ -1371,6 +1446,7 @@ void IndexManager::pageDataPrinter(void *pageData)
 // returns page number of first leaf page to look at for possible value 
 RC IndexManager::findOptimalPage(const Attribute &attr, const void* key, IXFileHandle &fileHandle) {
     unsigned rootpage = getRootPage(fileHandle);
+    /* cerr << "findOptimalPage: starting at rootPageNum: " << rootpage << endl; */
     void* cur = calloc(PAGE_SIZE, 1);
     fileHandle.readPage(rootpage, cur);
 
@@ -1480,10 +1556,18 @@ RC IndexManager::findOptimalPage(const Attribute &attr, const void* key, IXFileH
 }
 
 RC IndexManager::optimalPageHelper(const Attribute &attr, const void* key, IXFileHandle &fileHandle, uint32_t pageNum) {
+    /* cerr << "optimalPageHelper: now on pageNum: " << pageNum << endl; */
     void* cur = calloc(PAGE_SIZE, 1);
     fileHandle.readPage(pageNum, cur);
     IndexHeader header = getIndexHeader(cur);
+    /* if (*(int *)key == 57465) */
+    /*     pageDataPrinter(cur); */
+
     if (header.leaf) {
+        if (header.dataEntryNumber > 0) {
+            IndexDataEntry dataEntry = getIndexDataEntry(cur, 0);
+            /* cerr << "firstDataEntry key: " << dataEntry.key << endl; */
+        }
         free(cur);
         return pageNum;
     }
