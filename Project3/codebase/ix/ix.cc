@@ -167,6 +167,7 @@ RC IndexManager::insertEntry(IXFileHandle &ixfileHandle, const Attribute &attrib
         // Insert the entry to the page that split from the root.
         splitEntry->rc = insertInInternal(pageData, newRootPageNum, attribute, splitEntry->key, splitEntry->dataEntry.rid, ixfileHandle);
         if (splitEntry->rc != SUCCESS) {
+			free(pageData);
             free(splitEntry->key);
             delete(splitEntry);
             return IX_ROOT_SPLIT_FAILED;
@@ -178,11 +179,15 @@ RC IndexManager::insertEntry(IXFileHandle &ixfileHandle, const Attribute &attrib
         memset(pageData, 0, PAGE_SIZE);
         setMetaDataHeader(pageData, metaHeader);
         if (ixfileHandle.writePage(0, pageData)) {
+			free(pageData);
             free(splitEntry->key);
             delete(splitEntry);
             return IX_WRITE_FAILED;
         }
+
+	    free(pageData);
     }
+
     free(splitEntry->key);
     delete(splitEntry);
     return SUCCESS;
@@ -327,6 +332,7 @@ void IndexManager::printTreeHelperInt(uint32_t pageNum, uint16_t level, IXFileHa
     void *pageData = malloc(PAGE_SIZE);
     if (ixfileHandle.printReadPage(pageNum, pageData) != SUCCESS){ // Assumption that the meta page is on page 0 of the file
         free(pageData);
+        free(spaces);
         cerr << "printing tree read page failed." << endl;
         return;
     }
@@ -360,6 +366,7 @@ void IndexManager::printTreeHelperInt(uint32_t pageNum, uint16_t level, IXFileHa
             children_pages[i+1] = curEntry.rid.pageNum;
             cout << curEntry.key;
         }
+
         cout << "]," << endl;
         cout << spaces << "\"children\": [" << endl;
         for (uint32_t i = 0; i < header.dataEntryNumber + 1; i += 1) {
@@ -368,7 +375,9 @@ void IndexManager::printTreeHelperInt(uint32_t pageNum, uint16_t level, IXFileHa
             printTreeHelperInt(children_pages[i], level + 1, ixfileHandle);
             cout << endl;
         }
+
         cout << spaces << "]}";
+        free(children_pages);
     }
     
     free(spaces);
@@ -381,13 +390,16 @@ void IndexManager::printTreeHelperReal(uint32_t pageNum, uint16_t level, IXFileH
     for (int i = 0; i < level*4; i += 1) {
         spaces[i] = ' ';
     }
+
     spaces[level*4] = '\0';
     void *pageData = malloc(PAGE_SIZE);
     if (ixfileHandle.printReadPage(pageNum, pageData) != SUCCESS){ // Assumption that the meta page is on page 0 of the file
+        free(spaces);
         free(pageData);
         cerr << "printing tree read page failed." << endl;
         return;
     }
+
     IndexHeader header = printGetIndexHeader(pageData);
     if (header.leaf) {
         // then no children
@@ -401,8 +413,6 @@ void IndexManager::printTreeHelperReal(uint32_t pageNum, uint16_t level, IXFileH
             cout << curEntry.key << ": [(" << curEntry.rid.pageNum << "," << curEntry.rid.slotNum << ")]";
         }
         cout << "}";
-
-
     } 
     else {
         // with children
@@ -418,6 +428,7 @@ void IndexManager::printTreeHelperReal(uint32_t pageNum, uint16_t level, IXFileH
             children_pages[i+1] = curEntry.rid.pageNum;
             cout << curEntry.key;
         }
+
         cout << "]," << endl;
         cout << spaces << "\"children\": [" << endl;
         for (uint32_t i = 0; i < header.dataEntryNumber + 1; i += 1) {
@@ -426,7 +437,9 @@ void IndexManager::printTreeHelperReal(uint32_t pageNum, uint16_t level, IXFileH
             printTreeHelperReal(children_pages[i], level + 1, ixfileHandle);
             cout << endl;
         }
+
         cout << spaces << "]}";
+        free(children_pages);
     }
     
     free(spaces);
@@ -440,10 +453,9 @@ void IndexManager::printTreeHelperVarChar(uint32_t pageNum, uint16_t level, IXFi
     }
     spaces[level*4] = '\0';
 
-
-
     void *pageData = malloc(PAGE_SIZE);
     if (ixfileHandle.printReadPage(pageNum, pageData) != SUCCESS){ // Assumption that the meta page is on page 0 of the file
+        free(spaces);
         free(pageData);
         cerr << "printing tree read page failed." << endl;
         return;
@@ -468,9 +480,8 @@ void IndexManager::printTreeHelperVarChar(uint32_t pageNum, uint16_t level, IXFi
             cout << buf << ": [(" << curEntry.rid.pageNum << "," << curEntry.rid.slotNum << ")]";
             free(buf);
         }
+
         cout << "}";
-
-
     } 
     else {
         // with children
@@ -496,6 +507,7 @@ void IndexManager::printTreeHelperVarChar(uint32_t pageNum, uint16_t level, IXFi
             cout << buf;
             free(buf);
         }
+
         cout << "]," << endl;
         cout << spaces << "\"children\": [" << endl;
         for (uint32_t i = 0; i < header.dataEntryNumber + 1; i += 1) {
@@ -504,7 +516,9 @@ void IndexManager::printTreeHelperVarChar(uint32_t pageNum, uint16_t level, IXFi
             printTreeHelperReal(children_pages[i], level + 1, ixfileHandle);
             cout << endl;
         }
+
         cout << spaces << "]}";
+        free(children_pages);
     }
     
     free(spaces);
@@ -890,6 +904,7 @@ void IndexManager::insert(unsigned pageNum, const Attribute &attr, const void *k
         if (childPageNum == 0) {
             splitEntry->rc = IX_EXISTING_ENTRY; 
             splitEntry->isNull = true;
+            free(pageData);
             return;
         }
         
@@ -898,8 +913,10 @@ void IndexManager::insert(unsigned pageNum, const Attribute &attr, const void *k
         // fileHandle.readPage(pageNum, thispage);
         // cerr << "printing internal page" << endl;
         // pageDataPrinter(thispage);
-        if (splitEntry->rc != SUCCESS)
+        if (splitEntry->rc != SUCCESS) {
+            free(pageData);
             return;
+        }
 
         if (!splitEntry->isNull) {
             // This will be called at every backtrack level until we find space to insert.
@@ -908,11 +925,13 @@ void IndexManager::insert(unsigned pageNum, const Attribute &attr, const void *k
             splitEntry->rc = insertInInternal(pageData, pageNum, attr, splitEntry->key, splitEntry->dataEntry.rid, fileHandle);
             if ((splitEntry->rc != SUCCESS) && (splitEntry->rc != IX_INTERNAL_SPLIT)) {
                 splitEntry->isNull = true;
+                free(pageData);
                 return;
             }
 
             if (splitEntry->rc == IX_INTERNAL_SPLIT){
                 splitInternal(pageData, pageNum, attr, splitEntry->key, splitEntry->dataEntry.rid, fileHandle, splitEntry);
+                free(pageData);
                 return;
             }
         }
@@ -921,6 +940,7 @@ void IndexManager::insert(unsigned pageNum, const Attribute &attr, const void *k
         splitEntry->rc = insertInLeaf(pageData, pageNum, attr, key, rid, fileHandle);
         if ((splitEntry->rc != SUCCESS) && (splitEntry->rc != IX_LEAF_SPLIT)) {
             splitEntry->isNull = true;
+            free(pageData);
             return;
         }
 
@@ -930,12 +950,15 @@ void IndexManager::insert(unsigned pageNum, const Attribute &attr, const void *k
             } else {
                 splitLeaf(pageData, pageNum, attr, key, rid, fileHandle, splitEntry);
             }
+
+            free(pageData);
             return;
         }
 
         if (fileHandle.writePage(pageNum, pageData)) {
             splitEntry->isNull = true;
             splitEntry->rc = IX_WRITE_FAILED;
+            free(pageData);
             return;
         }
     }
@@ -1450,11 +1473,15 @@ RC IndexManager::optimalPageHelper(const Attribute &attr, const void* key, IXFil
     void* cur = calloc(PAGE_SIZE, 1);
     fileHandle.readPage(pageNum, cur);
     IndexHeader header = getIndexHeader(cur);
-    if (header.leaf)
+    if (header.leaf) {
+        free(cur);
         return pageNum;
+    }
 
-    if (header.dataEntryNumber == 0)
+    if (header.dataEntryNumber == 0) {
+        free(cur);
         return header.leftChildPageNum;
+    }
     
     IndexDataEntry entry;
     switch (attr.type) {
@@ -1465,10 +1492,12 @@ RC IndexManager::optimalPageHelper(const Attribute &attr, const void* key, IXFil
             entry = getIndexDataEntry(cur, i);
             if (key_val_int <= entry.key) {
                 if (i == 0) {
+                    free(cur);
                     return optimalPageHelper(attr, key, fileHandle, header.leftChildPageNum);
                 }
                 else {
                     IndexDataEntry correct_entry = getIndexDataEntry(cur, i - 1);
+                    free(cur);
                     return optimalPageHelper(attr, key, fileHandle, correct_entry.rid.pageNum);
                 }
                 
@@ -1477,6 +1506,8 @@ RC IndexManager::optimalPageHelper(const Attribute &attr, const void* key, IXFil
             //     return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);
             // }
         }
+
+        free(cur);
         return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);
         break;
     case TypeReal:
@@ -1486,10 +1517,12 @@ RC IndexManager::optimalPageHelper(const Attribute &attr, const void* key, IXFil
             entry = getIndexDataEntry(cur, i);
             if (key_val <= entry.key) {
                 if (i == 0) {
+                    free(cur);
                     return optimalPageHelper(attr, key, fileHandle, header.leftChildPageNum);
                 }
                 else {
                     IndexDataEntry correct_entry = getIndexDataEntry(cur, i - 1);
+                    free(cur);
                     return optimalPageHelper(attr, key, fileHandle, correct_entry.rid.pageNum);
                 }
                 
@@ -1498,6 +1531,8 @@ RC IndexManager::optimalPageHelper(const Attribute &attr, const void* key, IXFil
             //     return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);
             // }
         }
+
+        free(cur);
         return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);// break;
     case TypeVarChar:
         for (uint32_t i = 0; i < header.dataEntryNumber; i += 1) {
@@ -1522,10 +1557,12 @@ RC IndexManager::optimalPageHelper(const Attribute &attr, const void* key, IXFil
             if (cmp <= 0) {
                 // key is less than what current index entry is, meaning we need to look at previous page
                 if (i == 0) {
+                    free(cur);
                     return optimalPageHelper(attr, key, fileHandle, header.leftChildPageNum);
                 }
                 else {
                     IndexDataEntry correct_entry = getIndexDataEntry(cur, i - 1);
+                    free(cur);
                     return optimalPageHelper(attr, key, fileHandle, correct_entry.rid.pageNum);
                 }
             }
@@ -1534,8 +1571,11 @@ RC IndexManager::optimalPageHelper(const Attribute &attr, const void* key, IXFil
             // }
         }
         // if we get here without having returned a value, then we return the final page entry thingy
+        free(cur);
         return optimalPageHelper(attr, key, fileHandle, entry.rid.pageNum);// break;
     }
+
+    free(cur);
     return -99;
 }
 
