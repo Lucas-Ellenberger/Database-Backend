@@ -346,7 +346,7 @@ void IndexManager::printTreeHelperInt(uint32_t pageNum, uint16_t level, IXFileHa
             if (i != 0)
                 cout << ",";
             IndexDataEntry curEntry = printGetIndexDataEntry(pageData, i);
-            cout << curEntry.key << ": [(" << curEntry.rid.pageNum << "," << curEntry.rid.slotNum << ")]";
+            cout << curEntry.key;// << ": [(" << curEntry.rid.pageNum << "," << curEntry.rid.slotNum << ")]";
         }
         cout << "}";
 
@@ -1044,7 +1044,7 @@ void IndexManager::splitInternal(void *pageData, unsigned pageNum, const Attribu
     // We skip one entry because it will be copied up.
     unsigned indexOfFirstEntry = numOldEntries + 1;
     // Get half of the entries for the new page.
-    uint32_t numNewEntries = ceil(indexHeader.dataEntryNumber / 2) - 1;
+    uint32_t numNewEntries = ceil(indexHeader.dataEntryNumber / 2);
 
     
 
@@ -1053,16 +1053,22 @@ void IndexManager::splitInternal(void *pageData, unsigned pageNum, const Attribu
     IndexDataEntry trafficEntry = getIndexDataEntry(pageData, numOldEntries);
     uint32_t trafficEntryOldPageNum = trafficEntry.rid.pageNum;
     trafficEntry.rid.pageNum = fileHandle.getNumberOfPages();
-    splitEntry->key = &trafficEntry.key;
+    // splitEntry->key = &trafficEntry.key;
     splitEntry->dataEntry = trafficEntry; 
     splitEntry->isTypeVarChar = varchar;
     splitEntry->rc = SUCCESS;
     splitEntry->isNull = false;
+    if(attr.type == TypeInt) {
+        memcpy(splitEntry->key, &(trafficEntry.key), INT_SIZE);
+    }
+    if (attr.type == TypeReal) {
+        memcpy(splitEntry->key, &(trafficEntry.key), REAL_SIZE);
+    }
     if (varchar) {
         int length;
         memcpy(&length, (char *)pageData + splitEntry->dataEntry.key, sizeof(int));
         int totalLength = sizeof(int) + length;
-        splitEntry->key = calloc(totalLength, 1);
+        // splitEntry->key = calloc(totalLength, 1);
         memcpy((char *)splitEntry->key , (char *)pageData + splitEntry->dataEntry.key, totalLength);
     }
     /* else { */
@@ -1086,20 +1092,22 @@ void IndexManager::splitInternal(void *pageData, unsigned pageNum, const Attribu
         newPageInsert = true;
     }
 
-    // Update the old index header.
-    indexHeader.dataEntryNumber = numOldEntries;
-    indexHeader.nextSiblingPageNum = fileHandle.getNumberOfPages();
+    
     if (newPageInsert)
         insertInInternal(newPageData, pageNum, attr, key, rid, fileHandle);
 
     // Prepare the new pages header.
     IndexHeader newHeader;
-    newHeader.leaf = true;
+    newHeader.leaf = false;
     newHeader.dataEntryNumber = numNewEntries;
     newHeader.prevSiblingPageNum = pageNum;
     newHeader.nextSiblingPageNum = indexHeader.nextSiblingPageNum;
     newHeader.leftChildPageNum = trafficEntryOldPageNum;
     newHeader.freeSpaceOffset = PAGE_SIZE;
+
+    // Update the old index header.
+    indexHeader.dataEntryNumber = numOldEntries;
+    indexHeader.nextSiblingPageNum = fileHandle.getNumberOfPages();
 
     /* cerr << "num new entries" << numNewEntries << endl; */
     setIndexHeader(newPageData, newHeader);
@@ -1108,6 +1116,8 @@ void IndexManager::splitInternal(void *pageData, unsigned pageNum, const Attribu
 
     fileHandle.appendPage(newPageData);
 
+
+    // I have no idea what the below if statement is for and i definitely dont think its doing what we want it to do
     // Update the prevSiblingPageNum of the old nextSiblingPageNum.
     if (newHeader.nextSiblingPageNum != 0) {
         memset(newPageData, 0, PAGE_SIZE);
