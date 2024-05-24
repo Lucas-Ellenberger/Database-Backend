@@ -152,6 +152,8 @@ class IndexManager {
         void printTreeHelperReal(uint32_t pageNum, uint16_t level, IXFileHandle &ixfileHandle) const;
         void printTreeHelperVarChar(uint32_t pageNum, uint16_t level, IXFileHandle &ixfileHandle) const;
 
+        void pageDataPrinter(void *pageData);
+
         // All of the const functions to help with print.
         unsigned printGetRootPage(const IXFileHandle &fileHandle) const;
         IndexHeader printGetIndexHeader(void *pageData) const;
