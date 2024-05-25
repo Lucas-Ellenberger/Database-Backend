@@ -1443,7 +1443,7 @@ RC IndexManager::findOptimalPage(const Attribute &attr, const void* key, IXFileH
         memcpy(&key_val_int, key, 4);
         for (uint32_t i = 0; i < header.dataEntryNumber; i += 1) {
             entry = getIndexDataEntry(cur, i);
-            if (key_val_int <= entry.key) {
+            if (key_val_int < entry.key) {
                 if (i == 0) {
                     free(cur);
                     return optimalPageHelper(attr, key, fileHandle, header.leftChildPageNum);
@@ -1468,7 +1468,7 @@ RC IndexManager::findOptimalPage(const Attribute &attr, const void* key, IXFileH
         memcpy(&key_val, key, 4);
         for (uint32_t i = 0; i < header.dataEntryNumber; i += 1) {
             entry = getIndexDataEntry(cur, i);
-            if (key_val <= entry.key) {
+            if (key_val < entry.key) {
                 if (i == 0) {
                     free(cur);
                     return optimalPageHelper(attr, key, fileHandle, header.leftChildPageNum);
@@ -1508,7 +1508,7 @@ RC IndexManager::findOptimalPage(const Attribute &attr, const void* key, IXFileH
 
 
             int cmp = strcmp(key_buf, buf);
-            if (cmp <= 0) {
+            if (cmp < 0) {
                 // key is less than what current index entry is, meaning we need to look at previous page
                 if (i == 0) {
                     free(cur);
