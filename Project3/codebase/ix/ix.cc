@@ -232,6 +232,7 @@ RC IndexManager::deleteEntry(IXFileHandle &ixfileHandle, const Attribute &attrib
             return SUCCESS;
         }
 
+
         if (value < 0) {
             if (*(int *)key == 57465) {
                 cerr << "passed key: " << *(int *)key << endl;
