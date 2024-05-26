@@ -1022,7 +1022,7 @@ void IndexManager::insert(unsigned pageNum, const Attribute &attr, const void *k
             free(pageData);
             return;
         }
-
+        
         if (splitEntry->rc == IX_LEAF_SPLIT) {
             if (splitEntry->isTypeVarChar) {
                 splitLeaf(pageData, pageNum, attr, key, rid, fileHandle, splitEntry);
@@ -1296,7 +1296,8 @@ RC IndexManager::insertInLeaf(void *pageData, unsigned pageNum, const Attribute 
 void IndexManager::splitLeaf(void *pageData, unsigned pageNum, const Attribute &attr, const void *key,
         const RID &rid, IXFileHandle &fileHandle, SplitDataEntry *splitEntry)
 {   
-    // cerr << "page before we split:" <<endl;
+     cerr << "page before we split:" << endl;
+     printVarCharEntries(pageData);
     // pageDataPrinter(pageData);
 
     if (key == NULL)
@@ -1382,6 +1383,8 @@ void IndexManager::splitLeaf(void *pageData, unsigned pageNum, const Attribute &
 
     setIndexHeader(newPageData, newHeader);
     newPageFromEntries(pageData, newPageData, indexOfFirstEntry, numNewEntries, varchar);
+    cerr << "New leaf page After we split:" << endl;
+    printVarCharEntries(newPageData);
     // cerr << "printing before appending the page" << endl;
     // pageDataPrinter(newPageData);
     fileHandle.appendPage(newPageData);
@@ -1430,7 +1433,8 @@ void IndexManager::splitLeaf(void *pageData, unsigned pageNum, const Attribute &
         splitEntry->rc = IX_WRITE_FAILED;
         return;
     }
-
+    cerr << "Old leaf page After we split:" << endl;
+    printVarCharEntries(newPageData);
     free(newPageData);
     splitEntry->dataEntry = trafficEntry;
 }
@@ -2058,4 +2062,30 @@ unsigned IXFileHandle::getNumberOfPages()
 
     // Filesize is always PAGE_SIZE * number of pages
     return sb.st_size / PAGE_SIZE;
+}
+
+void IndexManager::printVarCharEntries(void* pageData) {
+    IndexHeader header = getIndexHeader(pageData);
+    if (isNonLeaf(pageData)){
+        cerr << "Non-Leaf Page" << endl;
+    } else {
+        cerr << "Leaf Page" << endl;
+    }
+
+    // Iterate through the data entries in the page
+    cerr << "Number of entries on page: " << header.dataEntryNumber << endl;     
+    for (unsigned i = 0; i < header.dataEntryNumber; i++) {
+        IndexDataEntry entry = getIndexDataEntry(pageData, i);
+        uint32_t length;
+        memcpy(&length, (char*)pageData + entry.key, sizeof(uint32_t));
+
+        char* varcharValue = (char*)malloc(length + 1);
+        memcpy(varcharValue, (char*)pageData + entry.key + sizeof(uint32_t), length);
+        varcharValue[length] = '\0'; 
+
+        
+        cerr << "Entry " << i << ": Key Length: " << length << ", Key = " << varcharValue << ", RID = (" << entry.rid.pageNum << ", " << entry.rid.slotNum << ")" << endl;
+
+        free(varcharValue);
+    }
 }
