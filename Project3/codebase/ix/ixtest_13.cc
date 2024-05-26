@@ -54,18 +54,19 @@ int testCase_13(const string &indexFileName, const Attribute &attribute)
         {
             key[4 + j] = 'a' + count - 1;
         }
-
         rid.pageNum = i;
         rid.slotNum = i;
-
+        std::string varcharKey(key + 4, *(int*)key);
+        cerr << "Key to insert: " << varcharKey << endl;
         rc = indexManager->insertEntry(ixfileHandle, attribute, &key, rid);
+        cerr << "Tuple: " << i << " Return Code: " << rc << endl;
         assert(rc == success && "indexManager::insertEntry() should not fail.");
 
         if (count == tested_ascii) {
             numOfTuplesTobeScanned++;
         }
     }
-    
+
     // insert more entries
     *(int *)key = tested_ascii;
     for (unsigned j = 0; j < tested_ascii; j++)
@@ -81,7 +82,6 @@ int testCase_13(const string &indexFileName, const Attribute &attribute)
         
         numOfTuplesTobeScanned++;
     }
-
     // collect counter
     // we will eyeball those numbers to see if they are reasonable.
     unsigned readPageCount = 0;

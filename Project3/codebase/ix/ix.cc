@@ -203,7 +203,8 @@ RC IndexManager::deleteEntry(IXFileHandle &ixfileHandle, const Attribute &attrib
     if (curr == 57465)
         cerr << "deleteEntry: trying to delete entry with key: " << *(int *)key << " (" << rid.pageNum << ", " << rid.slotNum << ")" << endl;
 
-    int pageNum = findOptimalPage(attribute, key, ixfileHandle);
+    // int pageNum = findOptimalPage(attribute, key, ixfileHandle);
+    int pageNum = findLeftmostPage(ixfileHandle);
     void *pageData = malloc(PAGE_SIZE);
     if (ixfileHandle.readPage(pageNum, pageData) != SUCCESS) {
         free(pageData);
@@ -1086,8 +1087,8 @@ unsigned IndexManager::getChildPageNum(void *pageData, const void *key, const At
             return lastChildPage;
 
         // compareKey returns 1 if we must keep searching.
-        if (result != 1)
-            return 0;
+        //if (result != 1)
+        //    return 0;
 
         lastChildPage = entry.rid.pageNum;
         /* cerr << "getChildPageNum: new last child pageNum: " << lastChildPage << endl; */
@@ -1294,7 +1295,7 @@ RC IndexManager::insertInLeaf(void *pageData, unsigned pageNum, const Attribute 
 
 void IndexManager::splitLeaf(void *pageData, unsigned pageNum, const Attribute &attr, const void *key,
         const RID &rid, IXFileHandle &fileHandle, SplitDataEntry *splitEntry)
-{
+{   
     // cerr << "page before we split:" <<endl;
     // pageDataPrinter(pageData);
 
@@ -1525,9 +1526,9 @@ RC IndexManager::findOptimalPage(const Attribute &attr, const void* key, IXFileH
 
             //get their varchar key and null terminate it
             uint32_t key_length;
-            memcpy(&key_length, key, VARCHAR_LENGTH_SIZE);
+            memcpy(&key_length, (char*)key, VARCHAR_LENGTH_SIZE);
             char* key_buf = (char*)malloc(key_length + 1);
-            memcpy(key_buf, key + VARCHAR_LENGTH_SIZE, key_length);
+            memcpy(key_buf, (char*)key + VARCHAR_LENGTH_SIZE, key_length);
             key_buf[key_length] = '\0';
 
 
@@ -1646,7 +1647,7 @@ RC IndexManager::optimalPageHelper(const Attribute &attr, const void* key, IXFil
             uint32_t key_length;
             memcpy(&key_length, key, VARCHAR_LENGTH_SIZE);
             char* key_buf = (char*)malloc(key_length + 1);
-            memcpy(key_buf, key + VARCHAR_LENGTH_SIZE, key_length);
+            memcpy(key_buf, (char*)key + VARCHAR_LENGTH_SIZE, key_length);
             key_buf[key_length] = '\0';
 
 
@@ -1795,12 +1796,14 @@ RC IndexManager::compareKey(void* pageData, const void* key, const Attribute &at
 
             //get their varchar key and null terminate it
             uint32_t key_length;
-            memcpy(&key_length, key, VARCHAR_LENGTH_SIZE);
+            memcpy(&key_length, (char*)key, VARCHAR_LENGTH_SIZE);
             char* key_buf = (char*)malloc(key_length + 1);
-            memcpy(key_buf, key + VARCHAR_LENGTH_SIZE, key_length);
+            memcpy(key_buf, (char*)key + VARCHAR_LENGTH_SIZE, key_length);
             key_buf[key_length] = '\0';
 
             int cmp = strcmp(key_buf, buf);
+            free(buf);
+            free(key_buf);
             if (cmp < 0) {
                 return -1;
             }
