@@ -218,7 +218,7 @@ RC IndexManager::deleteEntry(IXFileHandle &ixfileHandle, const Attribute &attrib
     for (uint32_t i = 0; i < header.dataEntryNumber; i++) {
         IndexDataEntry dataEntry = getIndexDataEntry(pageData, i);
         RC value = compareKey(pageData, key, attribute, dataEntry);
-        if (value == 0) { // We found data entry!
+        if (value == 0 && dataEntry.rid.pageNum == rid.pageNum && dataEntry.rid.slotNum == rid.slotNum) { // We found data entry!
             RC res = deleteInLeaf(pageData, pageNum, attribute, i, ixfileHandle);
             if (res != SUCCESS) {
                 free(pageData);
@@ -226,8 +226,10 @@ RC IndexManager::deleteEntry(IXFileHandle &ixfileHandle, const Attribute &attrib
             }
 
             found = true;
-            header = getIndexHeader(pageData);// Refreshes header
-            i--; // Decrements i to adjust for shift in entries
+            // header = getIndexHeader(pageData);// Refreshes header
+            // i--; // Decrements i to adjust for shift in entries
+            free(pageData);
+            return SUCCESS;
         }
 
         if (value < 0) {
