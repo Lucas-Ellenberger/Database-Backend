@@ -6,22 +6,100 @@ Team number (e.g., 01) :
 #2 Student Name : 
 
 2. Meta-data page in an index file
-- Show your meta-data page of an index design, if you have any. 
+- Show your meta-data page of an index design, if you have any.
+
+The meta-data page in our index file contains the following structure MetaDataHeader, primarily
+storing the root page number of the B+ tree which helps in navigating the index tree.
+
+typedef struct MetaDataHeader {
+    uint32_t rootPageNum;
+} MetaDataHeader;
+
+This meta-data is crucial as it helps in quickly locating the root for starting any tree traversal.
+The header is maintained through initialization and updating functions including newHeaderPage,
+setMetaDataHeader, and getMetaDataHeader. It is always positioned on the first page of any index
+file, ensuring consistent and quick access.
 
 
 3. Index Entry Format
-- Show your design for index entries (data structure). 
+- Show your design for index entries (data structure).
+
+Our index entries are defined by the IndexDataEntry structure, which includes a key and a Record ID (RID).
+The key is stored as an integer but is cast to appropriate types (int, float) based on the indexed attribute.
+If the indexed attribute is of type VarChar, we store the length followed by the data elsewhere on the page.
+The starting offset of that data is then stored in the indexDataEntry's key field. This allows us to efficently
+store VarChars of variable length.
+
+typedef struct IndexDataEntry {
+    int key;
+    RID rid;
+} IndexDataEntry;
 
 
 4. Page Format
 - Show your internal-page (non-leaf node) design.
 
+Internal pages use the IndexHeader and IndexDataEntry structures, which includes metadata for navigation and management of the
+B+ tree nodes. The leaf boolean allows us to discern if it is a leaf or internal node. Following that is the dataEntryNumber
+which assist us in performing calculations to read and write on the page. The next and previous sibling page number fields are
+only used in leaf pages. The freeSpaceOffset is used for when we have an index attribute of type VarChar.
+
+typedef struct IndexHeader {
+    bool leaf;
+    uint32_t dataEntryNumber;
+    uint32_t nextSiblingPageNum;
+    uint32_t prevSiblingPageNum;
+    uint32_t leftChildPageNum;
+    uint16_t freeSpaceOffset;
+} IndexHeader;
+
+Following this are Index Data Entries which are used in both internal and leaf pages. We are able to use the same structure since
+the leaf flag in the header allows us to distinguish "cop" entries from leaf entries. In the case where we are dealing with an
+internal entry, we use the rid.pageNum to store the child page of that entry.
+
+typedef struct IndexDataEntry {
+    int key;
+    RID rid;
+} IndexDataEntry;
+
 - Show your leaf-page (leaf node) design.
 
+The leaf-page utilizes the IndexHeader and IndexDataEntry structures. Just as explained in the internal page section, the IndexHeader
+keeps track of metadata retaining to the page. The difference is that it uses nextSiblingPageNum and leftChildPageNum to connect adjacent
+sister pages. This allows us to scan and perform search operations.
+
+typedef struct IndexHeader {
+    bool leaf;
+    uint32_t dataEntryNumber;
+    uint32_t nextSiblingPageNum;
+    uint32_t prevSiblingPageNum;
+    uint32_t leftChildPageNum;
+    uint16_t freeSpaceOffset;
+} IndexHeader;
+
+The Index Data Entries store the key value (actual key value for INTS and FLOATS and offset for VarChars) and the RID of that record. 
+
+typedef struct IndexDataEntry {
+    int key;
+    RID rid;
+} IndexDataEntry;
+
+In both internal and leaf pages, The IndexHeader and IndexDataEntrys are fundamentally inserted and deleted the same where they are
+kept in sorted order (based on key value) and compressed to efficently utilize space.
 
 5. Implementation Detail
 
 - Provide  implementation details, including how you handle insertions (including splits), and how you handle deletion using lazy deletion.
+
+Insertions and Splits:
+Insertions first start by traveling down the B+ tree, guided by its search key. Upon reaching the leaf page, it checks if there is enough
+space to insert. If there is, the insertion begin and return success. If there is not sufficient space, a split is initiated where the page
+is divided, and a new entry is propagated up to the parent node. An insertion may recursively split parent pages as there needs to be space
+to store propagated entry.
+
+Deletions Using Lazy Deletion:
+For deletions, we employed a lazy deletion strategy where deleted entries are removed without maintaining a "half full" constraint on our
+leaf pages. This simplifies deletion operations by not having to split or merge.
 
 
 6. Other (optional)
