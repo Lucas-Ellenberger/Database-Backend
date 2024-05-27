@@ -139,3 +139,7 @@ We have other issues with the code, currently a variety of memory leaks, mainly 
 Lastly, there is an issue with our printBtree() function, where it will print the first child page properly, but then it will print the 
 sibling of that page as its child, and then it will print it again later as its sibling. 
 We did not do the extra credit portion of this assignment. 
+
+An edge case of PrintBTree(): upon multiple splits there will be multiple keys in the parent node. Seeing as how we use the parent node to determine
+how many children any given node has, in the event that a page splits, and then one of the pages has all entries inside of it deleted, our printBtree 
+function will print a {key: []} to denote there is a page, but it holds no key, rid pairs. 
