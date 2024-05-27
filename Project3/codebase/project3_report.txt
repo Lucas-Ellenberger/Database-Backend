@@ -1,29 +1,149 @@
 1. Basic information
-Team number (e.g., 01) : 
-#1 Student ID : 
-#1 Student Name : 
-#2 Student ID : 
-#2 Student Name : 
+Team number (e.g., 01) : 42
+#1 Student ID : 1885381
+#1 Student Name : Bradley Haire
+#2 Student ID : 1865864
+#2 Student Name : Lucas Ellenberger
+#3 Student ID : 1849584
+#3 Student Name : Harrison Nou
 
 2. Meta-data page in an index file
-- Show your meta-data page of an index design, if you have any. 
+- Show your meta-data page of an index design, if you have any.
+
+The meta-data page in our index file contains the following structure MetaDataHeader, primarily
+storing the root page number of the B+ tree which helps in navigating the index tree.
+
+typedef struct MetaDataHeader {
+    uint32_t rootPageNum;
+} MetaDataHeader;
+
+This meta-data is crucial as it helps in quickly locating the root for starting any tree traversal.
+The header is maintained through initialization and updating functions including newHeaderPage,
+setMetaDataHeader, and getMetaDataHeader. It is always positioned on the first page of any index
+file, ensuring consistent and quick access.
 
 
 3. Index Entry Format
-- Show your design for index entries (data structure). 
+- Show your design for index entries (data structure).
+
+Our index entries are defined by the IndexDataEntry structure, which includes a key and a Record ID (RID).
+The key is stored as an integer but is cast to appropriate types (int, float) based on the indexed attribute.
+If the indexed attribute is of type VarChar, we store the length followed by the data elsewhere on the page.
+The starting offset of that data is then stored in the indexDataEntry's key field. This allows us to efficently
+store VarChars of variable length.
+
+typedef struct IndexDataEntry {
+    int key;
+    RID rid;
+} IndexDataEntry;
 
 
 4. Page Format
 - Show your internal-page (non-leaf node) design.
 
+Internal pages use the IndexHeader and IndexDataEntry structures, which includes metadata for navigation and management of the
+B+ tree nodes. The indexheader is the first thing on the page. The leaf boolean allows us to discern if it is a leaf or internal node. Following that is the dataEntryNumber
+which assist us in performing calculations to read and write on the page, as it contains the number of total data entries on the page. 
+The next and previous sibling page number fields are only used in leaf pages. The freeSpaceOffset is used for 
+when we have an index attribute of type VarChar. The leftChildPageNum attribute stores the first page number that the internal node 
+points to, since any internal node must always point to at least one child node. Further child page numbers are held in index data 
+entries.
+
+typedef struct IndexHeader {
+    bool leaf;
+    uint32_t dataEntryNumber;
+    uint32_t nextSiblingPageNum;
+    uint32_t prevSiblingPageNum;
+    uint32_t leftChildPageNum;
+    uint16_t freeSpaceOffset;
+} IndexHeader;
+
+Following this are Index Data Entries which are used in both internal and leaf pages. We are able to use the same structure since
+the leaf flag in the header allows us to distinguish "cop" entries from leaf entries. In the case where we are dealing with an
+internal entry, we use the rid.pageNum to store the child page of that entry.
+
+typedef struct IndexDataEntry {
+    int key;
+    RID rid;
+} IndexDataEntry;
+
 - Show your leaf-page (leaf node) design.
 
+The leaf-page utilizes the IndexHeader and IndexDataEntry structures. Just as explained in the internal page section, the IndexHeader
+keeps track of metadata relating to the page, and is the first thing on any page. The difference is that it uses nextSiblingPageNum and leftChildPageNum to connect adjacent
+sister pages. This allows us to scan and perform search operations. The leftChildPageNum attribute is not used in this case, as leaf 
+nodes have no children. 
+
+typedef struct IndexHeader {
+    bool leaf;
+    uint32_t dataEntryNumber;
+    uint32_t nextSiblingPageNum;
+    uint32_t prevSiblingPageNum;
+    uint32_t leftChildPageNum;
+    uint16_t freeSpaceOffset;
+} IndexHeader;
+
+The Index Data Entries store the key value (actual key value for INTS and FLOATS and offset for VarChars) and the RID of that record. 
+
+typedef struct IndexDataEntry {
+    int key;
+    RID rid;
+} IndexDataEntry;
+
+Upon insertion of an entry on either a leaf or internal node, the index data entry will be inserted into the correct sorted order 
+location based on key value, and upon deletion are immediately compressed to efficiently utilize space. 
 
 5. Implementation Detail
 
 - Provide  implementation details, including how you handle insertions (including splits), and how you handle deletion using lazy deletion.
 
+Insertions and Splits:
+Insertions first start by traveling down the B+ tree, guided by its search key. Upon reaching the leaf page, it checks if there is enough
+space to insert. If there is, the insertion begin and return success. If there is not sufficient space, a split is initiated where the page
+is divided, and a new entry is propagated up to the parent node. An insertion may recursively split parent pages as there needs to be space
+to store the parent entry. The way the split works is we will count the second half of entries, create a new IndexHeader, write it onto a buffer page, 
+grab the second half of the entries, these will be placed into the same buffer page, and then that page will be appended. We store a boolean that determines 
+whether the entry that caused us to split is supposed to be on the newly created page (ie to the right of the traffic cop that will be copied up to 
+the parent), or whether it is supposed to go on the page to the left of the traffic cop (the original page that had to split). If it goes on the right page, 
+then it is appended, otherwise we create a new IndexHeader, append that to a buffer, and then move the first half of the data entries onto the buffer, before 
+writing the buffer back to the original page. At this point if we were supposed to put the split-causing entry onto the left page, it will then be inserted. 
+After this, we write into a struct called SplitDataEntry to pass up to our calling function (enabling recursive splits) to write into the parent node the
+traffic cop. 
+As for inserting entries themselves, we will dive down to the correct page using the findOptimalPage function, which finds the leftmost possible page 
+that an entry can validly be inserted on while maintaining the order of the B+ tree. Once we get to this page, supposing there is enough space for us to insert 
+our entry, we will loop through the entries on the page, and we will push back all entries with a greater value key than us by the size of a singular IndexDataEntry, 
+and then insert our entry in the space created. 
+
+Varchar entries work a little differently. All of the entries work the same way, but the varchars themselves are not stored in sorted order on the page, rather we 
+rely on the offset of the correctly sorted IndexDataEntry entry to maintain the order. This means that when splitting, we have to loop through each of the data 
+entries that is being moved, and grab their associated varchar and move it individually. Due to using a buffer, this is not terribly difficult. 
+As for the insertion itself, it works the exact same way, except now we will first find the length of the key of the varchar, subtract that from our freeSpaceOffset
+attribute on the page, then insert the key at that location, and also set the offset (which is the key of the IndexDataEntry entry for that varchar) to that same value. 
+
+We write back to cold storage after each insertion. As for when we split a page, the page that is newly appended is written back as soon as it is appended, and the 
+old page that is overwritten is written back to storage the moment the page is finished having all data written to it. 
+
+Deletions Using Lazy Deletion:
+For deletions, we employed a lazy deletion strategy where deleted entries are removed without maintaining a "half full" constraint on our
+leaf pages. This simplifies deletion operations by not having to merge even if there is enough space to do so. We do ensure following 
+deletion that the entries on the page are compressed. 
+
 
 6. Other (optional)
 - Freely use this section to tell us about things that are related to Project3, but are not described in other sections of this report (optional).
 
+As it stands, we do not pass test 11 of the public tests. We believe this is due to a linking error between pages in which some leaf pages fail to 
+properly assign the value of their nextSiblingPageNum to the correct value. While this has not caused an error during smaller scans, it does cause 
+scan of this very large test to fail. 
+We have other issues with the code, currently a variety of memory leaks, mainly caused by an unknown error in splitLeaf(). 
+Lastly, there is an issue with our printBtree() function, where it will print the first child page properly, but then it will print the 
+sibling of that page as its child, and then it will print it again later as its sibling. The printBTree function prints separate 
+entries for each key, even if the keys are the same value. This was done to simplify the design. If we were to implement this functionality, for each
+leaf page, we would grab the first key, then scan forward until we found a key that was different. For each key that matched, we would append their RIDs
+to a list of RIDs, and then print the key, all of the matching RIDs, and then move onto the next key on that page. We would repeat this until the page
+ran out of entries, and then move onto the next page and repeat. 
+We did not do the extra credit portion of this assignment. 
+
+An edge case of PrintBTree(): upon multiple splits there will be multiple keys in the parent node. Seeing as how we use the parent node to determine
+how many children any given node has, in the event that a page splits, and then one of the pages has all entries inside of it deleted, our printBtree 
+function will print a {key: []} to denote there is a page, but it holds no key, rid pairs. 

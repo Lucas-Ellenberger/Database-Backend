@@ -206,7 +206,7 @@ RC IndexManager::deleteEntry(IXFileHandle &ixfileHandle, const Attribute &attrib
         free(pageData);
         return IX_READ_FAILED;
     }
-    
+
     bool found = false;
     IndexHeader header = getIndexHeader(pageData);
     for (uint32_t i = 0; i < header.dataEntryNumber; i++) {
@@ -223,7 +223,7 @@ RC IndexManager::deleteEntry(IXFileHandle &ixfileHandle, const Attribute &attrib
             free(pageData);
             return SUCCESS;
         }
-
+      
         if (value < 0) {
             free(pageData);
             if (!found)
@@ -234,7 +234,6 @@ RC IndexManager::deleteEntry(IXFileHandle &ixfileHandle, const Attribute &attrib
     }
 
     free(pageData);
-
     if ((header.nextSiblingPageNum == 0) && (!found))
         return IX_REMOVE_FAILED;
 
@@ -696,7 +695,7 @@ RC IX_ScanIterator::getNextEntry(RID &rid, void *key)
                 return SUCCESS;
             }
         }
-
+        cerr << "Hoorah" << endl;
         pageNum = header->nextSiblingPageNum;
         if (pageNum == 0)
             return IX_EOF;
@@ -1080,7 +1079,7 @@ void IndexManager::splitInternal(void *pageData, unsigned pageNum, const Attribu
     // Update the old index header.
     indexHeader.dataEntryNumber = numOldEntries;
     indexHeader.nextSiblingPageNum = fileHandle.getNumberOfPages();
-
+  
     setIndexHeader(newPageData, newHeader);
     newPageFromEntries(pageData, newPageData, indexOfFirstEntry, numNewEntries, varchar);
     /* IndexDataEntry newDataEntry = getIndexDataEntry(pageData, 0); */
@@ -1178,7 +1177,7 @@ RC IndexManager::insertInLeaf(void *pageData, unsigned pageNum, const Attribute 
 
 void IndexManager::splitLeaf(void *pageData, unsigned pageNum, const Attribute &attr, const void *key,
         const RID &rid, IXFileHandle &fileHandle, SplitDataEntry *splitEntry)
-{   
+{
     bool varchar = false;
     if (attr.type == TypeVarChar)
         varchar = true;
@@ -1296,6 +1295,7 @@ void IndexManager::pageDataPrinter(void *pageData)
 // returns page number of first leaf page to look at for possible value 
 RC IndexManager::findOptimalPage(const Attribute &attr, const void* key, IXFileHandle &fileHandle) {
     unsigned rootpage = getRootPage(fileHandle);
+    /* cerr << "findOptimalPage: starting at rootPageNum: " << rootpage << endl; */
     void* cur = calloc(PAGE_SIZE, 1);
     fileHandle.readPage(rootpage, cur);
 
@@ -1394,14 +1394,17 @@ RC IndexManager::findOptimalPage(const Attribute &attr, const void* key, IXFileH
 }
 
 RC IndexManager::optimalPageHelper(const Attribute &attr, const void* key, IXFileHandle &fileHandle, uint32_t pageNum) {
+    /* cerr << "optimalPageHelper: now on pageNum: " << pageNum << endl; */
     void* cur = calloc(PAGE_SIZE, 1);
     fileHandle.readPage(pageNum, cur);
     IndexHeader header = getIndexHeader(cur);
+    /* if (*(int *)key == 57465) */
+    /*     pageDataPrinter(cur); */
+
     if (header.leaf) {
         if (header.dataEntryNumber > 0) {
             IndexDataEntry dataEntry = getIndexDataEntry(cur, 0);
-        }
-
+  
         free(cur);
         return pageNum;
     }
