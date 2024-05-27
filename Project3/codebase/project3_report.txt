@@ -137,7 +137,11 @@ properly assign the value of their nextSiblingPageNum to the correct value. Whil
 scan of this very large test to fail. 
 We have other issues with the code, currently a variety of memory leaks, mainly caused by an unknown error in splitLeaf(). 
 Lastly, there is an issue with our printBtree() function, where it will print the first child page properly, but then it will print the 
-sibling of that page as its child, and then it will print it again later as its sibling. 
+sibling of that page as its child, and then it will print it again later as its sibling. The printBTree function prints separate 
+entries for each key, even if the keys are the same value. This was done to simplify the design. If we were to implement this functionality, for each
+leaf page, we would grab the first key, then scan forward until we found a key that was different. For each key that matched, we would append their RIDs
+to a list of RIDs, and then print the key, all of the matching RIDs, and then move onto the next key on that page. We would repeat this until the page
+ran out of entries, and then move onto the next page and repeat. 
 We did not do the extra credit portion of this assignment. 
 
 An edge case of PrintBTree(): upon multiple splits there will be multiple keys in the parent node. Seeing as how we use the parent node to determine
