@@ -740,7 +740,9 @@ RC IX_ScanIterator::getNextEntry(RID &rid, void *key)
     while (true) {
         for ( ; entryNum < header->dataEntryNumber; entryNum++) {
             dataEntry = _ix->getIndexDataEntry(pageData, entryNum);
+            // cerr << "RID pageNum: " << dataEntry.rid.pageNum << ", RID slotNum: " << dataEntry.rid.slotNum << endl; 
             /* cerr << "dataEntry.key: " << dataEntry.key << endl; */
+
             if (!checkUpperBound(dataEntry))
                 return IX_EOF;
 
@@ -758,9 +760,11 @@ RC IX_ScanIterator::getNextEntry(RID &rid, void *key)
                         memcpy(key, &(returnedEntry->key), sizeof(REAL_SIZE));
                         break;
                     case TypeVarChar:
+                        // _ix->printVarCharEntries(pageData);
                         memcpy(&length, (char *)pageData + dataEntry.key, sizeof(int));
                         totalLength = length + sizeof(int);
-                        memcpy(&(returnedEntry->key), (char *)pageData + dataEntry.key, totalLength);
+                        
+                        //memcpy(&(returnedEntry->key), (char *)pageData + dataEntry.key, totalLength);
                         memcpy(key, (char *)pageData + dataEntry.key, totalLength);
                         break;
                     default:
@@ -768,10 +772,14 @@ RC IX_ScanIterator::getNextEntry(RID &rid, void *key)
                 }
                 /* cerr << "got to return success inside of getNext Entry" << endl; */
                 rid = returnedEntry->rid;
+                //returnedEntry->rid.pageNum = dataEntry.rid.pageNum;
+                //returnedEntry->rid.slotNum = dataEntry.rid.slotNum;
+                // cerr << "returnedEntry's RID : " << returnedEntry->rid.pageNum << ", Dataentry's RID: " << dataEntry.rid.pageNum << "rid RID: " << rid.pageNum << endl; 
+
                 return SUCCESS;
             }
         }
-
+        cerr << "Hoorah" << endl;
         pageNum = header->nextSiblingPageNum;
         /* cerr << "pagenum of getnext entry: " << pageNum << endl; */
         if (pageNum == 0)
@@ -1234,7 +1242,7 @@ RC IndexManager::insertInLeaf(void *pageData, unsigned pageNum, const Attribute 
     // Should return SUCCESS if new data entry is inserted into leaf page. If page is full, return IX_INSERT_SPLIT 
     if (!canFitEntry(pageData, attr, key))
         return IX_LEAF_SPLIT;
-
+    
     IndexHeader header = getIndexHeader(pageData);
     // Prepare the new data entry and write var char if necessary.
     IndexDataEntry newDataEntry;
@@ -1296,10 +1304,6 @@ RC IndexManager::insertInLeaf(void *pageData, unsigned pageNum, const Attribute 
 void IndexManager::splitLeaf(void *pageData, unsigned pageNum, const Attribute &attr, const void *key,
         const RID &rid, IXFileHandle &fileHandle, SplitDataEntry *splitEntry)
 {   
-     cerr << "page before we split:" << endl;
-     printVarCharEntries(pageData);
-    // pageDataPrinter(pageData);
-
     if (key == NULL)
         cerr << "what is this code!" << endl;
     /* cerr << "split leaf page num: " << pageNum << endl; */
@@ -1313,7 +1317,7 @@ void IndexManager::splitLeaf(void *pageData, unsigned pageNum, const Attribute &
     uint32_t numOldEntries = floor(indexHeader.dataEntryNumber / 2);
     unsigned indexOfFirstEntry = numOldEntries;
     // Get half of the entries for the new page.
-    uint32_t numNewEntries = ceil(indexHeader.dataEntryNumber / 2)  + 1;
+    uint32_t numNewEntries = ceil(indexHeader.dataEntryNumber / 2.0);
 
     // cerr << "num old entries: " <<numOldEntries << endl << "index of first entry: " << indexOfFirstEntry << endl;
     // cerr << "num new entries: " << numNewEntries << endl;
@@ -1380,11 +1384,10 @@ void IndexManager::splitLeaf(void *pageData, unsigned pageNum, const Attribute &
     indexHeader.dataEntryNumber = numOldEntries;
     unsigned newPageNum = fileHandle.getNumberOfPages();
     indexHeader.nextSiblingPageNum = newPageNum;
+    indexHeader.freeSpaceOffset = PAGE_SIZE;
 
     setIndexHeader(newPageData, newHeader);
     newPageFromEntries(pageData, newPageData, indexOfFirstEntry, numNewEntries, varchar);
-    cerr << "New leaf page After we split:" << endl;
-    printVarCharEntries(newPageData);
     // cerr << "printing before appending the page" << endl;
     // pageDataPrinter(newPageData);
     fileHandle.appendPage(newPageData);
@@ -1433,8 +1436,6 @@ void IndexManager::splitLeaf(void *pageData, unsigned pageNum, const Attribute &
         splitEntry->rc = IX_WRITE_FAILED;
         return;
     }
-    cerr << "Old leaf page After we split:" << endl;
-    printVarCharEntries(newPageData);
     free(newPageData);
     splitEntry->dataEntry = trafficEntry;
 }
