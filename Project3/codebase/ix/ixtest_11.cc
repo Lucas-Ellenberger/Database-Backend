@@ -78,6 +78,7 @@ int testCase_11(const string &indexFileName, const Attribute &attribute){
         rc = indexManager->closeFile(ixfileHandle);
         return fail;
     }
+    indexManager->printBtree(ixfileHandle, attribute);
 
     // Delete some tuples
     cerr << endl;
