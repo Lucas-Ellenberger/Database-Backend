@@ -15,7 +15,7 @@ RelationManager* RelationManager::instance()
 }
 
 RelationManager::RelationManager()
-: tableDescriptor(createTableDescriptor()), columnDescriptor(createColumnDescriptor())
+: tableDescriptor(createTableDescriptor()), columnDescriptor(createColumnDescriptor()), indexDescriptor(createIndexDescriptor())
 {
 }
 
@@ -35,6 +35,11 @@ RC RelationManager::createCatalog()
     if (rc)
         return rc;
 
+    // Create indexes table
+    rc = rbfm->createFile(getFileName(INDEX_TABLE_NAME));
+    if (rc)
+        return rc;
+
     // Add table entries for both Tables and Columns
     rc = insertTable(TABLES_TABLE_ID, 1, TABLES_TABLE_NAME);
     if (rc)
@@ -43,12 +48,21 @@ RC RelationManager::createCatalog()
     if (rc)
         return rc;
 
+    //add table entries for indexes
+    rc = insertTable(INDEX_TABLE_ID, 1, INDEX_TABLE_NAME);
+    if (rc)
+        return rc;
 
     // Add entries for tables and columns to Columns table
     rc = insertColumns(TABLES_TABLE_ID, tableDescriptor);
     if (rc)
         return rc;
     rc = insertColumns(COLUMNS_TABLE_ID, columnDescriptor);
+    if (rc)
+        return rc;
+
+    // add column entries for index table
+    rc = insertColumns(INDEX_TABLE_ID, indexDescriptor);
     if (rc)
         return rc;
 
@@ -67,6 +81,10 @@ RC RelationManager::deleteCatalog()
         return rc;
 
     rc = rbfm->destroyFile(getFileName(COLUMNS_TABLE_NAME));
+    if (rc)
+        return rc;
+
+    rc = rbfm->destroyFile(getFileName(INDEX_TABLE_NAME));
     if (rc)
         return rc;
 
@@ -172,6 +190,43 @@ RC RelationManager::deleteTable(const string &tableName)
 
     return SUCCESS;
 }
+
+RC RelationManager::createIndex(const string &tableName, const string &attributeName) {
+    RC rc;
+    
+
+    // TODO we first need to check if the table with name tableName exists
+    // TODO then check if the attribute with name attributeName exists
+    // can use isSystemTable() logic to do this
+
+    //TODO check if the index already exists
+
+    IndexManager *ix = IndexManager::instance();
+    // Create the index on the attribute
+    string ix_name = getIndexName(tableName, attributeName);
+    if ((rc = ix->createFile(ix_name)))
+        return rc;
+
+    //insert the index into the indexes table
+
+    rc = insertIndexes(tableName, attributeName, ix_name);
+    if (rc)
+        return rc;
+
+    return SUCCESS;
+}
+
+string RelationManager::getIndexName(const string &tableName, const string &attributeName) {
+    string ret_val = string(tableName);
+    strcat(ret_val, "_");
+    strcat(ret_val, attributeName);
+    return ret_val;
+}
+
+RC RelationManager::destroyIndex(const string &tableName, const string &attributeName) {
+    return -1;
+}
+
 
 // Fills the given attribute vector with the recordDescriptor of tableName
 RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &attrs)
@@ -494,6 +549,28 @@ vector<Attribute> RelationManager::createColumnDescriptor()
     return cd;
 }
 
+vector<Attribute> RelationManager::createIndexDescriptor() {
+    vector<Attribute> ixd;
+    
+    Attribute attr;
+    attr.name = INDEX_COL_TABLE_ID;
+    attr.type = TypeInt;
+    attr.length = (AttrLength)INT_SIZE;
+    ixd.push_back(attr);
+
+    attr.name = INDEX_COL_ATTR_NAME;
+    attr.type = TypeVarChar;
+    attr.length = (AttrLength)INDEX_COL_ATTR_NAME_SIZE;
+    ixd.push_back(attr);
+
+    attr.name = INDEX_COL_INDEX_NAME;
+    attr.type = TypeVarChar;
+    attr.length = (AttrLength)INDEX_COL_INDEX_NAME_SIZE;
+    ixd.push_back(attr);
+
+    return ixd;
+}
+
 // Creates the Tables table entry for the given id and tableName
 // Assumes fileName is just tableName + file extension
 void RelationManager::prepareTablesRecordData(int32_t id, bool system, const string &tableName, void *data)
@@ -560,6 +637,10 @@ void RelationManager::prepareColumnsRecordData(int32_t id, int32_t pos, Attribut
 
     memcpy((char*) data + offset, &pos, INT_SIZE);
     offset += INT_SIZE;
+}
+
+RC RelationManager::insertIndexes(const string &tableName, const string &attributeName, const string &indexName) {
+    return -1;
 }
 
 // Insert the given columns into the Columns table
