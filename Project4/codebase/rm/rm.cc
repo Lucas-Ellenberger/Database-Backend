@@ -197,13 +197,13 @@ RC RelationManager::createIndex(const string &tableName, const string &attribute
     RC rc;
     bool exists;
 
-    // TODO we first need to check if the table with name tableName exists
+    // we first need to check if the table with name tableName exists
     tableExists(exists, tableName);
     if (!exists) {
         return RM_TABLE_DN_EXIST;
     }
     
-    // TODO then check if the attribute with name attributeName exists
+    //check if the attribute with name attributeName exists in the associated table with name tableName
     attributeExists(exists, tableName, attributeName);
     if (!exists) {
         return RM_ATTR_DN_EXIST;
@@ -211,7 +211,7 @@ RC RelationManager::createIndex(const string &tableName, const string &attribute
     IndexManager *ix = IndexManager::instance();
     // Create the index on the attribute
     string ix_name = getIndexName(tableName, attributeName);
-    //TODO check if the index already exists
+    // check if the index already exists
     if(fileExists(ix_name))
         return RM_INDEX_ALR_EXISTS;
 
@@ -584,6 +584,34 @@ vector<Attribute> RelationManager::createIndexDescriptor() {
     return ixd;
 }
 
+void RelationManager::prepareIndexesRecordData(int32_t table_id, const string &attributeName, const string &indexName, void* data) {
+    unsigned offset = 0;
+    int32_t attr_name_len = attributeName.length();
+    int32_t ix_name_len = indexName.length();
+
+    // All fields non-null
+    char null = 0;
+    // Copy in null indicator
+    memcpy((char*) data + offset, &null, 1);
+    offset += 1;
+    // Copy in table id
+    memcpy((char*) data + offset, &table_id, INT_SIZE);
+    offset += INT_SIZE;
+
+    // copy in varchar attributeName
+    memcpy((char*) data + offset, &attr_name_len, VARCHAR_LENGTH_SIZE);
+    offset += VARCHAR_LENGTH_SIZE;
+    memcpy((char*) data + offset, attributeName.c_str(), attr_name_len);
+    offset += attr_name_len;
+
+    // copy in varchar indexName
+    memcpy((char*) data + offset, &ix_name_len, VARCHAR_LENGTH_SIZE);
+    offset += VARCHAR_LENGTH_SIZE;
+    memcpy((char*) data + offset, indexName.c_str(), ix_name_len);
+    offset += ix_name_len;
+
+}
+
 // Creates the Tables table entry for the given id and tableName
 // Assumes fileName is just tableName + file extension
 void RelationManager::prepareTablesRecordData(int32_t id, bool system, const string &tableName, void *data)
@@ -653,7 +681,27 @@ void RelationManager::prepareColumnsRecordData(int32_t id, int32_t pos, Attribut
 }
 
 RC RelationManager::insertIndexes(const string &tableName, const string &attributeName, const string &indexName) {
-    return -1;
+    RC rc;
+
+    RecordBasedFileManager *rbfm = RecordBasedFileManager::instance();
+    FileHandle fileHandle;
+    RID rid;
+    int32_t id;
+
+    rc = rbfm->openFile(getFileName(INDEX_TABLE_NAME), fileHandle);
+    if (rc)
+        return rc;
+    rc = getTableID(tableName, id);
+    if (rc)
+        return rc;
+
+    void* indexData = malloc(INDEX_RECORD_DATA_SIZE);
+    
+    prepareIndexesRecordData(id, attributeName, indexName, indexData);
+    rc = rbfm->insertRecord(fileHandle, indexDescriptor, indexData, rid);
+    rbfm->closeFile(fileHandle);
+    free(indexData);
+    return rc;
 }
 
 // Insert the given columns into the Columns table
@@ -890,15 +938,11 @@ RC RelationManager::attributeExists(bool &exists, const string &tableName, const
     return SUCCESS;
 }
 
-
 bool RelationManager::fileExists(const string& fileName) {
     struct stat buffer;   
     return (stat(fileName.c_str(), &buffer) == 0);
 }
-// bool exists_test3 (const std::string& name) {
-//   struct stat buffer;   
-//   return (stat (name.c_str(), &buffer) == 0); 
-// }
+
 
 void RelationManager::toAPI(const string &str, void *data)
 {

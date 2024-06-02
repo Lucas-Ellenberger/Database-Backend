@@ -53,6 +53,9 @@ using namespace std;
 #define INDEX_COL_INDEX_NAME         "index-name"
 #define INDEX_COL_INDEX_NAME_SIZE    101
 
+// 1 null byte, 1 integer and 2 varchars
+#define INDEX_RECORD_DATA_SIZE 1 + 3 * INT_SIZE + INDEX_COL_ATTR_NAME_SIZE + INDEX_COL_INDEX_NAME_SIZE
+
 # define RM_EOF (-1)  // end of a scan operator
 
 #define RM_CANNOT_MOD_SYS_TBL 1
@@ -176,6 +179,7 @@ private:
 //index function
   string getIndexName(const string &tableName, const string &attributeName);
   RC insertIndexes(const string &tableName, const string &attributeName, const string &indexName);
+  void prepareIndexesRecordData(int32_t table_id, const string &attributeName, const string &indexName, void* data);
   RC tableExists(bool &exists, const string &tableName);
   RC attributeExists(bool &exists, const string &tableName, const string attr_name);
   bool fileExists(const string& fileName);
