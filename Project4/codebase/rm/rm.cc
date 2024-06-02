@@ -1,8 +1,10 @@
 
 #include "rm.h"
-
+#include "../ix/ix.h"
 #include <algorithm>
 #include <cstring>
+
+#include <sys/stat.h>
 
 RelationManager* RelationManager::_rm = 0;
 
@@ -193,17 +195,26 @@ RC RelationManager::deleteTable(const string &tableName)
 
 RC RelationManager::createIndex(const string &tableName, const string &attributeName) {
     RC rc;
-    
+    bool exists;
 
     // TODO we first need to check if the table with name tableName exists
+    tableExists(exists, tableName);
+    if (!exists) {
+        return RM_TABLE_DN_EXIST;
+    }
+    
     // TODO then check if the attribute with name attributeName exists
-    // can use isSystemTable() logic to do this
-
-    //TODO check if the index already exists
-
+    attributeExists(exists, tableName, attributeName);
+    if (!exists) {
+        return RM_ATTR_DN_EXIST;
+    }
     IndexManager *ix = IndexManager::instance();
     // Create the index on the attribute
     string ix_name = getIndexName(tableName, attributeName);
+    //TODO check if the index already exists
+    if(fileExists(ix_name))
+        return RM_INDEX_ALR_EXISTS;
+
     if ((rc = ix->createFile(ix_name)))
         return rc;
 
@@ -217,9 +228,11 @@ RC RelationManager::createIndex(const string &tableName, const string &attribute
 }
 
 string RelationManager::getIndexName(const string &tableName, const string &attributeName) {
-    string ret_val = string(tableName);
-    strcat(ret_val, "_");
-    strcat(ret_val, attributeName);
+    string table = string(tableName);
+    table.push_back('_');
+    // strcat(ret_val, "_");
+    // strcat(ret_val, attributeName);
+    string ret_val = table + attributeName;
     return ret_val;
 }
 
@@ -818,6 +831,74 @@ RC RelationManager::isSystemTable(bool &system, const string &tableName)
     rbfm_si.close();
     return rc;   
 }
+
+RC RelationManager::tableExists(bool &exists, const string &tableName)
+{
+    RecordBasedFileManager *rbfm = RecordBasedFileManager::instance();
+    FileHandle fileHandle;
+    RC rc;
+
+    rc = rbfm->openFile(getFileName(TABLES_TABLE_NAME), fileHandle);
+    if (rc)
+        return rc;
+
+    // We only care about system column
+    vector<string> projection;
+    projection.push_back(TABLES_COL_TABLE_NAME);
+
+    // Set up value to be tableName in API format (without null indicator)
+    void *value = malloc(5 + TABLES_COL_TABLE_NAME_SIZE);
+    int32_t name_len = tableName.length();
+    memcpy(value, &name_len, INT_SIZE);
+    memcpy((char*)value + INT_SIZE, tableName.c_str(), name_len);
+
+    // Find table whose table-name is equal to tableName
+    RBFM_ScanIterator rbfm_si;
+    rc = rbfm->scan(fileHandle, tableDescriptor, TABLES_COL_TABLE_NAME, EQ_OP, value, projection, rbfm_si);
+
+    RID rid;
+    void *data = malloc (1 + INT_SIZE);
+    if ((rc = rbfm_si.getNextRecord(rid, data)) == SUCCESS)
+    {
+        // Parse the system field from that table entry
+        string tmp;
+        fromAPI(tmp, data);
+        exists = (tmp.compare(tableName) == 0);
+    }
+    if (rc == RBFM_EOF)
+        rc = SUCCESS;
+
+    free(data);
+    free(value);
+    rbfm->closeFile(fileHandle);
+    rbfm_si.close();
+    return rc;   
+}
+
+RC RelationManager::attributeExists(bool &exists, const string &tableName, const string attr_name)
+{
+    vector<Attribute> attrs;
+    RC rc = getAttributes(tableName, attrs);
+    if (rc)
+        return rc;
+    exists = false;
+    for (uint32_t i = 0; i < attrs.size(); i += 1) {
+        if (attrs[i].name == attr_name) {
+            exists = true;
+        }
+    }
+    return SUCCESS;
+}
+
+
+bool RelationManager::fileExists(const string& fileName) {
+    struct stat buffer;   
+    return (stat(fileName.c_str(), &buffer) == 0);
+}
+// bool exists_test3 (const std::string& name) {
+//   struct stat buffer;   
+//   return (stat (name.c_str(), &buffer) == 0); 
+// }
 
 void RelationManager::toAPI(const string &str, void *data)
 {

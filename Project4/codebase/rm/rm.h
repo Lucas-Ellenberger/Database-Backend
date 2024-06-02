@@ -57,6 +57,9 @@ using namespace std;
 
 #define RM_CANNOT_MOD_SYS_TBL 1
 #define RM_NULL_COLUMN        2
+#define RM_TABLE_DN_EXIST     3
+#define RM_ATTR_DN_EXIST      4
+#define RM_INDEX_ALR_EXISTS     5
 
 typedef struct IndexedAttr
 {
@@ -173,7 +176,9 @@ private:
 //index function
   string getIndexName(const string &tableName, const string &attributeName);
   RC insertIndexes(const string &tableName, const string &attributeName, const string &indexName);
-
+  RC tableExists(bool &exists, const string &tableName);
+  RC attributeExists(bool &exists, const string &tableName, const string attr_name);
+  bool fileExists(const string& fileName);
 };
 
 #endif
