@@ -44,6 +44,7 @@ RC TEST_RM_1(const string &tableName, const int nameLength, const string &name, 
     {
         cout << "**** RM Test Case 1 finished. The result will be examined. *****" << endl << endl;
         free(tuple);
+        free(nullsIndicator); // They forgot to free nullsIndicator!!!
         free(returnedData);
         return success;
     }
