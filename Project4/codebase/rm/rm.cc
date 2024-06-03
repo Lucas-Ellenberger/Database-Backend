@@ -236,7 +236,7 @@ RC RelationManager::createIndex(const string &tableName, const string &attribute
     getAttributes(tableName, attrs);
     for (size_t i = 0; i < attrs.size(); ++i) {
         if (attrs[i].name == attributeName) {
-            attr = attrs;
+            attr = attrs[i];
             break;
         }
     }
