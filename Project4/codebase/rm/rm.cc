@@ -224,6 +224,46 @@ RC RelationManager::createIndex(const string &tableName, const string &attribute
     if (rc)
         return rc;
 
+    // Open index file
+    IXFileHandle ixfileHandle;
+    if ((rc = ix->openFile(ix_name, ixfileHandle))) {
+        return rc;
+    }
+
+    // Gets info of the attribute to be indexed
+    vector<Attribute> attrs;
+    Attribute attr;
+    getAttributes(tableName, attrs);
+    for (size_t i = 0; i < attrs.size(); ++i) {
+        if (attrs[i].name == attributeName) {
+            attr = attrs;
+            break;
+        }
+    }
+
+
+    // Initialize scanIterator of table file
+    RM_ScanIterator rmsi;
+    vector<string> attribute = {attributeName};
+    scan(tableName, attributeName, NO_OP, NULL, attribute, rmsi);
+
+
+    // Populate index with existing records
+    RID rid;
+    void *data = malloc(PAGE_SIZE);
+
+    while (rmsi.getNextTuple(rid, data) != RM_EOF) {
+        rc = ix->insertEntry(ixfileHandle, attr, data, rid);
+        if (rc) {
+            free(data);
+            ix->closeFile(ixfileHandle);
+            return rc;
+        }
+    }
+
+    free(data);
+    rmsi.close();
+    ix->closeFile(ixfileHandle);
     return SUCCESS;
 }
 
