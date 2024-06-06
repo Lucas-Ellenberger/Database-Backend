@@ -23,9 +23,9 @@ Filter::Filter(Iterator* input, const Condition &condition) {
     }
 
     vector<Attribute> attributes = iter->attrs;
-    int i;
     bool found_attr = false;
-    for (i = 0; i < attributes.size(); i += 1) {
+    int i;
+    for (i = 0; i < (int) attributes.size(); i += 1) {
         if (attributes[i].name.compare(cond.lhsAttr) == 0) {
             found_attr = true;
             break;
@@ -34,7 +34,7 @@ Filter::Filter(Iterator* input, const Condition &condition) {
 
     if (!found_attr) {
         //attribute to compare against does not exist in our attrs, so fail
-        return FILTER_ATTR_NT_EXIST;
+        error = FILTER_ATTR_NT_EXIST;
     }
     else {
         compare_attr_index = i;
@@ -42,8 +42,10 @@ Filter::Filter(Iterator* input, const Condition &condition) {
     }
 
     if (cond.bRhsIsAttr || cond.rhsValue.type != attributes[i].type) {
-        return FILTER_BAD_COND;
+        error = FILTER_BAD_COND;
     }
+
+    error = SUCCESS;
 }
 
 int Filter::getNullIndicatorSize(int fieldCount) 
@@ -97,9 +99,9 @@ RC Filter::getNextTuple(void* data) {
         // unsigned size = sizeof (RecordLength) + (recordDescriptor.size()) * sizeof(ColumnOffset) + nullIndicatorSize;
         // count up size of the record (amount of bytes to copy into *data)
         // when we reach the index of the attribute to be compared, do the comparison
-        for (unsigned i = 0; i < (unsigned) recordDescriptor.size(); i += 1)
+        for (unsigned i = 0; i < recordDescriptor.size(); i += 1)
         {
-            if (i == compare_attr_index) {
+            if (i == (unsigned) compare_attr_index) {
                 //then offset of the record is already what we need it to be
                 if (compare_attr.type == TypeInt) {
                     int32_t recordInt;
@@ -174,7 +176,8 @@ Project::Project(Iterator* input, const vector<string> &attrNames) {
     iter = input;
     names = attrNames;
     if(attrNames.size() > input->attrs.size()) {
-        return PRJCT_BAD_ATTR_COND;
+        error = PRJCT_BAD_ATTR_COND;
+        return;
     }
   
     for (unsigned i = 0; i < attrNames.size(); i += 1) {
@@ -193,7 +196,9 @@ Project::Project(Iterator* input, const vector<string> &attrNames) {
     if (projection_attributes.size() != attrNames.size()) {
         // then not all attributes found a name that matched, 
         // therefore some attribute must have been passed that does not exist
-        return PRJCT_BAD_ATTR_COND;
+        error = PRJCT_BAD_ATTR_COND;
+    } else {
+        error = SUCCESS;
     }
 }
 
@@ -229,7 +234,7 @@ RC Project::getNextTuple(void* data) {
                 int cur_field = 0;
                 int offset = given_null_size;
                 while(projection_attributes[i].name.compare(iter->attrs[cur_field].name) != 0) {
-                    iter->attrs[cur_field]
+                    iter->attrs[cur_field];
                     if (fieldIsNull(nullIndicator, cur_field))
                         continue;
 
@@ -337,7 +342,7 @@ INLJoin::INLJoin(Iterator *leftIn,           // Iterator of input R
     left = leftIn;
     right = rightIn;
     cond = condition; 
-    left_attrs = leftIn->attrs;
+    leftIn->getAttributes(left_attrs);
     right_attrs = rightIn->attrs;
     newLeft = true;
     outer_page_data = malloc(PAGE_SIZE);
@@ -352,8 +357,10 @@ INLJoin::INLJoin(Iterator *leftIn,           // Iterator of input R
         }
     }
 
-    if (!attr_exists)
-        return JOIN_BAD_COND;
+    if (!attr_exists) {
+        error = JOIN_BAD_COND;
+        return;
+    }
 
     for (unsigned i = 0; i < right_attrs.size(); i += 1) {
         if (right_attrs[i].name.compare(cond.rhsAttr) == 0) {
@@ -363,8 +370,10 @@ INLJoin::INLJoin(Iterator *leftIn,           // Iterator of input R
         }
     }
 
-    if (!attr_exists)
-        return JOIN_BAD_COND;
+    if (!attr_exists) {
+        error  = JOIN_BAD_COND;
+        return;
+    }
 
     for (unsigned i = 0; i < left_attrs.size(); i += 1) { 
         total_attrs.push_back(left_attrs[i]);
@@ -373,6 +382,8 @@ INLJoin::INLJoin(Iterator *leftIn,           // Iterator of input R
     for (unsigned i = 0; i < right_attrs.size(); i += 1) { 
         total_attrs.push_back(right_attrs[i]);
     }
+
+    error = SUCCESS;
 }
 
 RC INLJoin::getNextTuple(void *data) {
@@ -396,7 +407,7 @@ RC INLJoin::getNextTuple(void *data) {
         }
     }
 
-    while ((inner_rc = right.getNextTuple(inner_page_data)) == SUCCESS) {
+    while ((inner_rc = right->getNextTuple(inner_page_data)) == SUCCESS) {
         // do comparison
         // getAttributeFromRecord(inner_page_data, 0, right_attr_comp_index, right_attrs[right_attr_comp_index].type, right_data);
         int right_comp_attr_offset = getAttributeOffset(inner_page_data, false);
