@@ -93,7 +93,7 @@ public:
   ~RM_IndexScanIterator() {};
 
   // "data" follows the same format as RelationManager::insertTuple()
-  RC getNextTuple(RID &rid, void *key);
+  RC getNextEntry(RID &rid, void *key);
   RC close();
 
   friend class RelationManager;

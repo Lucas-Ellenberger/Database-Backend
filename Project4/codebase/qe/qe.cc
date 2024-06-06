@@ -1,4 +1,9 @@
 
+#include <vector>
+#include <string>
+#include <cstring>
+#include <iostream>
+
 #include "qe.h"
 
 Filter::Filter(Iterator* input, const Condition &condition) {
@@ -172,8 +177,8 @@ Project::Project(Iterator* input, const vector<string> &attrNames) {
         return PRJCT_BAD_ATTR_COND;
     }
   
-    for(int i = 0; i < attrNames.size(); i += 1) {
-        for (int j = 0; j < input->attrs.size(); j += 1) {
+    for (unsigned i = 0; i < attrNames.size(); i += 1) {
+        for (unsigned j = 0; j < input->attrs.size(); j += 1) {
             if(attrNames[i].compare(input->attrs[j].name) == 0) {
                 // the names match
                 Attribute attr;
@@ -220,7 +225,7 @@ RC Project::getNextTuple(void* data) {
             // offset += given_null_size;
             // output_offset = given_null_size;
             //time to add all of our data into the buffer
-            for(int i = 0; i < projection_attributes.size(); i += 1) {
+            for (unsigned i = 0; i < projection_attributes.size(); i += 1) {
                 int cur_field = 0;
                 int offset = given_null_size;
                 while(projection_attributes[i].name.compare(iter->attrs[cur_field].name) != 0) {
@@ -256,15 +261,15 @@ RC Project::getNextTuple(void* data) {
                     continue;
                 }
 
-                switch (recordDescriptor[cur_field].type)
+                switch (projection_attributes[cur_field].type)
                 {
                     case TypeInt:
-                        memcpy((char*)data + output_offset, (char*)cur_data + offset, INT_SIZE)
+                        memcpy((char*)data + output_offset, (char*)cur_data + offset, INT_SIZE);
                         offset += INT_SIZE;
                         output_offset += INT_SIZE;
                     break;
                     case TypeReal:
-                        memcpy((char*)data + output_offset, (char*)cur_data + offset, REAL_SIZE)
+                        memcpy((char*)data + output_offset, (char*)cur_data + offset, REAL_SIZE);
                         offset += REAL_SIZE;
                         output_offset += REAL_SIZE;
                     break;
@@ -276,7 +281,7 @@ RC Project::getNextTuple(void* data) {
                         // size += varcharSize;
                         offset += VARCHAR_LENGTH_SIZE;
                         output_offset += VARCHAR_LENGTH_SIZE;
-                        memcpy((char*)data + output_offset, (char*)cur_data + offset, varcharSize)
+                        memcpy((char*)data + output_offset, (char*)cur_data + offset, varcharSize);
                         offset += varcharSize;
                         output_offset += varcharSize;
                     break;
@@ -322,6 +327,7 @@ RC Project::setFieldToNull(char *nullIndicator, int i) {
 
     // int indicatorMask  = 1 << (CHAR_BIT - 1 - (i % CHAR_BIT));
     nullIndicator[indicatorIndex] = nullIndicator[indicatorIndex] | mask;
+    return SUCCESS;
 }
 
 INLJoin::INLJoin(Iterator *leftIn,           // Iterator of input R
@@ -330,7 +336,7 @@ INLJoin::INLJoin(Iterator *leftIn,           // Iterator of input R
 
     left = leftIn;
     right = rightIn;
-    cond = conditon; 
+    cond = condition; 
     left_attrs = leftIn->attrs;
     right_attrs = rightIn->attrs;
     newLeft = true;
@@ -338,7 +344,7 @@ INLJoin::INLJoin(Iterator *leftIn,           // Iterator of input R
     //check to make sure that the two conditional attrs for inner and outer are both ,
     // as well as record the indexes of each of these attrs
     bool attr_exists = false;
-    for (int i = 0; i < left_attrs.size(); i += 1) {
+    for (unsigned i = 0; i < left_attrs.size(); i += 1) {
         if (left_attrs[i].name.compare(cond.lhsAttr) == 0) {
             attr_exists = true;
             left_attr_comp_index = i;
@@ -349,7 +355,7 @@ INLJoin::INLJoin(Iterator *leftIn,           // Iterator of input R
     if (!attr_exists)
         return JOIN_BAD_COND;
 
-    for (int i = 0; i < right_attrs.size(); i += 1) {
+    for (unsigned i = 0; i < right_attrs.size(); i += 1) {
         if (right_attrs[i].name.compare(cond.rhsAttr) == 0) {
             attr_exists = true;
             right_attr_comp_index = i;
@@ -360,11 +366,11 @@ INLJoin::INLJoin(Iterator *leftIn,           // Iterator of input R
     if (!attr_exists)
         return JOIN_BAD_COND;
 
-    for (int i = 0; i < left_attrs.size(); i += 1) { 
+    for (unsigned i = 0; i < left_attrs.size(); i += 1) { 
         total_attrs.push_back(left_attrs[i]);
     }
 
-    for (int i = 0; i < right_attrs.size(); i += 1) { 
+    for (unsigned i = 0; i < right_attrs.size(); i += 1) { 
         total_attrs.push_back(right_attrs[i]);
     }
 }
@@ -482,8 +488,6 @@ RC INLJoin::getNextTuple(void *data) {
                 // memcpy(right_comp_data, &varcharSize, VARCHAR_LENGTH_SIZE);
                 // memcpy(right_comp_data, (char*)inner_page_data + right_comp_attr_offset + VARCHAR_LENGTH_SIZE, varcharSize);
                 break;
-            default:
-                cerr << "getNextTuple: Invalid attribute type." << endl;
         }
       
         if (!equal) {
@@ -570,8 +574,6 @@ unsigned INLJoin::getRecordSize(const vector<Attribute> &recordDescriptor, const
                 size += varcharSize;
                 offset += varcharSize + VARCHAR_LENGTH_SIZE;
                 break;
-            deafult:
-                cerr << "getRecordSize: Invalid recordDescriptor type." << endl;
         }
     }
 
@@ -584,14 +586,14 @@ int INLJoin::getAttributeOffset(void* data, bool left) {
     char* nullIndicator = NULL;
     if(left) {
         attr_index = left_attr_comp_index;
-        int nullIndicatorSize = getNullIndicatorSize(left_attrs.size())
+        int nullIndicatorSize = getNullIndicatorSize(left_attrs.size());
         offset += nullIndicatorSize;
         nullIndicator = (char*)calloc(nullIndicatorSize, 1);
         memcpy(nullIndicator, data, nullIndicatorSize);
     }
     else {
         attr_index = right_attr_comp_index;
-        int nullIndicatorSize = getNullIndicatorSize(right_attrs.size())
+        int nullIndicatorSize = getNullIndicatorSize(right_attrs.size());
         offset += nullIndicatorSize;
         nullIndicator = (char*)calloc(nullIndicatorSize, 1);
         memcpy(nullIndicator, data, nullIndicatorSize);
@@ -616,8 +618,6 @@ int INLJoin::getAttributeOffset(void* data, bool left) {
                     // size += varcharSize;
                     offset += varcharSize + VARCHAR_LENGTH_SIZE;
                     break;
-                default:
-                    cerr << "getAttributeOffset: Invalid attribute type." << endl;
             }
         }
     }
@@ -640,8 +640,6 @@ int INLJoin::getAttributeOffset(void* data, bool left) {
                     // size += varcharSize;
                     offset += varcharSize + VARCHAR_LENGTH_SIZE;
                     break;
-                default:
-                    cerr << "getAttributeOffset: Invalid attribute type." << endl;
             }
         }
     }
