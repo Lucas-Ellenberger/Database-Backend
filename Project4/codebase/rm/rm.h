@@ -86,6 +86,21 @@ private:
   FileHandle fileHandle;
 };
 
+// RM_ScanIterator is an iteratr to go through tuples
+class RM_IndexScanIterator {
+public:
+  RM_IndexScanIterator() {};
+  ~RM_IndexScanIterator() {};
+
+  // "data" follows the same format as RelationManager::insertTuple()
+  RC getNextTuple(RID &rid, void *key);
+  RC close();
+
+  friend class RelationManager;
+private:
+  IX_ScanIterator ix_iter;
+  IXFileHandle ixfileHandle;
+};
 
 // Relation Manager
 class RelationManager
@@ -125,6 +140,14 @@ public:
       const void *value,                    // used in the comparison
       const vector<string> &attributeNames, // a list of projected attributes
       RM_ScanIterator &rm_ScanIterator);
+
+  RC indexScan(const string &tableName,
+      const string &attributeName,
+      const void *lowKey,                   // used in the comparison
+      const void *highKey,                  // used in the comparison
+      bool lowKeyInclusive,
+      bool highKeyInclusive,
+      RM_IndexScanIterator &rm_IndexScanIterator);
 
 // all index functions
   RC createIndex(const string &tableName, const string &attributeName);
