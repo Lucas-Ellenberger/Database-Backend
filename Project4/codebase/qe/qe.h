@@ -9,6 +9,14 @@
 
 #define QE_EOF (-1)  // end of the index scan
 
+#define FILTER_NT_INIT -2
+#define FILTER_ATTR_NT_EXIST -3
+#define FILTER_BAD_COND -4
+#define JOIN_RSLT_TOO_BIG -5
+#define PRJCT_BAD_ATTR_COND -6
+#define PRJCT_NT_INIT -7
+#define JOIN_BAD_COND -8
+
 using namespace std;
 
 typedef enum{ MIN=0, MAX, COUNT, SUM, AVG } AggregateOp;
@@ -32,6 +40,7 @@ struct Condition {
     Value   rhsValue;       // right-hand side value if bRhsIsAttr = FALSE
 };
 
+bool compare();
 
 class Iterator {
     // All the relational operators and access methods are iterators.
@@ -201,6 +210,12 @@ class Filter : public Iterator {
         RC getNextTuple(void *data) {return QE_EOF;};
         // For attribute in vector<Attribute>, name it as rel.attr
         void getAttributes(vector<Attribute> &attrs) const{};
+    private:
+        Iterator* iter = NULL;
+        Condition cond;
+        Attribute compare_attr;
+        int compare_attr_index;
+
 };
 
 
@@ -214,6 +229,10 @@ class Project : public Iterator {
         RC getNextTuple(void *data) {return QE_EOF;};
         // For attribute in vector<Attribute>, name it as rel.attr
         void getAttributes(vector<Attribute> &attrs) const{};
+    private:
+        Iterator* iter = NULL;
+        const vector<string> names;
+        vector<Attribute> projection_attributes;
 };
 
 
@@ -229,6 +248,18 @@ class INLJoin : public Iterator {
         RC getNextTuple(void *data){return QE_EOF;};
         // For attribute in vector<Attribute>, name it as rel.attr
         void getAttributes(vector<Attribute> &attrs) const{};
+
+    private:
+        Iterator* left;
+        IndexScan* right;
+        vector<Attribute> left_attrs;
+        vector<Attribute> right_attrs;
+        const Condition cond;
+        bool newLeft;
+        void* outer_page_data;
+        int left_attr_comp_index;
+        int right_attr_comp_index;
+        const vector<Attribute> total_attrs;
 };
 
 

@@ -7,6 +7,8 @@
 
 #include "../rbf/rbfm.h"
 
+#include "../ix/ix.h"
+
 using namespace std;
 
 #define TABLE_FILE_EXTENSION ".t"
@@ -41,10 +43,26 @@ using namespace std;
 // 1 null byte, 4 integer fields and a varchar
 #define COLUMNS_RECORD_DATA_SIZE 1 + 5 * INT_SIZE + COLUMNS_COL_COLUMN_NAME_SIZE
 
+#define INDEX_TABLE_NAME             "Indexes"
+#define INDEX_TABLE_ID               3
+
+// we should need a table id to know which table the index is actually on
+#define INDEX_COL_TABLE_ID           "table-id"
+#define INDEX_COL_ATTR_NAME          "attribute-name"
+#define INDEX_COL_ATTR_NAME_SIZE     50
+#define INDEX_COL_INDEX_NAME         "index-name"
+#define INDEX_COL_INDEX_NAME_SIZE    101
+
+// 1 null byte, 1 integer and 2 varchars
+#define INDEX_RECORD_DATA_SIZE 1 + 3 * INT_SIZE + INDEX_COL_ATTR_NAME_SIZE + INDEX_COL_INDEX_NAME_SIZE
+
 # define RM_EOF (-1)  // end of a scan operator
 
 #define RM_CANNOT_MOD_SYS_TBL 1
 #define RM_NULL_COLUMN        2
+#define RM_TABLE_DN_EXIST     3
+#define RM_ATTR_DN_EXIST      4
+#define RM_INDEX_ALR_EXISTS     5
 
 typedef struct IndexedAttr
 {
@@ -108,6 +126,9 @@ public:
       const vector<string> &attributeNames, // a list of projected attributes
       RM_ScanIterator &rm_ScanIterator);
 
+// all index functions
+  RC createIndex(const string &tableName, const string &attributeName);
+  RC destroyIndex(const string &tableName, const string &attributeName);
 
 protected:
   RelationManager();
@@ -117,6 +138,7 @@ private:
   static RelationManager *_rm;
   const vector<Attribute> tableDescriptor;
   const vector<Attribute> columnDescriptor;
+  const vector<Attribute> indexDescriptor;
 
   // Convert tableName to file name (append extension)
   static string getFileName(const char *tableName);
@@ -125,6 +147,7 @@ private:
   // Create recordDescriptor for Table/Column tables
   static vector<Attribute> createTableDescriptor();
   static vector<Attribute> createColumnDescriptor();
+  static vector<Attribute> createIndexDescriptor();
 
   // Prepare an entry for the Table/Column table
   void prepareTablesRecordData(int32_t id, bool system, const string &tableName, void *data);
@@ -153,6 +176,13 @@ private:
   void toAPI(const int32_t integer, void *data);
   void toAPI(const string &str, void *data);
 
+//index function
+  string getIndexName(const string &tableName, const string &attributeName);
+  RC insertIndexes(const string &tableName, const string &attributeName, const string &indexName);
+  void prepareIndexesRecordData(int32_t table_id, const string &attributeName, const string &indexName, void* data);
+  RC tableExists(bool &exists, const string &tableName);
+  RC attributeExists(bool &exists, const string &tableName, const string attr_name);
+  bool fileExists(const string& fileName);
 };
 
 #endif
