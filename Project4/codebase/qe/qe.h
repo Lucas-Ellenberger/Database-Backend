@@ -51,6 +51,8 @@ class Iterator {
         virtual RC getNextTuple(void *data) = 0;
         virtual void getAttributes(vector<Attribute> &attrs) const = 0;
         virtual ~Iterator() {};
+    /* protected: */
+    /*     vector<Attribute> attrs; */
 };
 
 
@@ -215,9 +217,10 @@ class Filter : public Iterator {
         void getAttributes(vector<Attribute> &attrs) const; //{};
     private:
         Iterator* iter = NULL;
-        Condition cond;
+        const Condition cond;
         Attribute compare_attr;
         int compare_attr_index;
+        RC error;
         int getNullIndicatorSize(int fieldCount);
         bool fieldIsNull(char *nullIndicator, int i);
         bool checkScanCondition(int recordInt, CompOp compOp, const void *value);
@@ -240,6 +243,8 @@ class Project : public Iterator {
         Iterator* iter = NULL;
         const vector<string> names;
         vector<Attribute> projection_attributes;
+        RC error;
+
         int getNullIndicatorSize(int fieldCount);
         bool fieldIsNull(char *nullIndicator, int i);
         RC setFieldToNull(char *nullIndicator, int i);
@@ -264,12 +269,13 @@ class INLJoin : public Iterator {
         IndexScan* right;
         vector<Attribute> left_attrs;
         vector<Attribute> right_attrs;
-        const Condition cond;
+        Condition cond;
         bool newLeft;
         void* outer_page_data;
         int left_attr_comp_index;
         int right_attr_comp_index;
-        const vector<Attribute> total_attrs;
+        vector<Attribute> total_attrs;
+        RC error;
         int getNullIndicatorSize(int fieldCount);
         unsigned getRecordSize(const vector<Attribute> &recordDescriptor, const void *data);
         int getAttributeOffset(void* data, bool left);
