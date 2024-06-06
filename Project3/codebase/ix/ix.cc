@@ -695,7 +695,7 @@ RC IX_ScanIterator::getNextEntry(RID &rid, void *key)
                 return SUCCESS;
             }
         }
-        cerr << "Hoorah" << endl;
+        // cerr << "Hoorah" << endl;
         pageNum = header->nextSiblingPageNum;
         if (pageNum == 0)
             return IX_EOF;
@@ -1402,9 +1402,6 @@ RC IndexManager::optimalPageHelper(const Attribute &attr, const void* key, IXFil
     /*     pageDataPrinter(cur); */
 
     if (header.leaf) {
-        if (header.dataEntryNumber > 0) {
-            IndexDataEntry dataEntry = getIndexDataEntry(cur, 0);
-  
         free(cur);
         return pageNum;
     }
