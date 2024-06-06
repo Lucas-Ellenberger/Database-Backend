@@ -1101,3 +1101,57 @@ RC RM_ScanIterator::close()
     rbfm->closeFile(fileHandle);
     return SUCCESS;
 }
+
+RC RelationManager::indexScan(const string &tableName,
+      const string &attributeName,
+      const void *lowKey,
+      const void *highKey,
+      bool lowKeyInclusive,
+      bool highKeyInclusive,
+      RM_IndexScanIterator &rm_IndexScanIterator)
+{
+    // Open the file for the given tableName
+    IndexManager *ix = IndexManager::instance();
+    RC rc = ix->openFile(getFileName(tableName), rm_IndexScanIterator.ixfileHandle);
+    if (rc)
+        return rc;
+
+    // grab the record descriptor for the given tableName
+    // TODO: Get the attribute for the given attributeName.
+    vector<Attribute> recordDescriptor;
+    rc = getAttributes(tableName, recordDescriptor);
+    if (rc)
+        return rc;
+
+    Attribute attr;
+    for (auto & element : recordDescriptor) {
+        if (element.name == attributeName) {
+            attr = element;
+            break;
+        }
+    }
+
+    // Use the underlying rbfm_scaniterator to do all the work
+    rc = ix->scan(rm_IndexScanIterator.ixfileHandle, attr, lowKey, highKey,
+                     lowKeyInclusive, highKeyInclusive, rm_IndexScanIterator.ix_iter);
+    if (rc)
+        return rc;
+
+    return SUCCESS;
+}
+
+// Let ix do all the work
+RC RM_IndexScanIterator::getNextTuple(RID &rid, void *key)
+{
+    return ix_iter.getNextEntry(rid, key);
+}
+
+// Close our file handle, rbfm_scaniterator
+RC RM_IndexScanIterator::close()
+{
+    IndexManager *ix = IndexManager::instance();
+    ix_iter.close();
+    ix->closeFile(ixfileHandle);
+    return SUCCESS;
+}
+

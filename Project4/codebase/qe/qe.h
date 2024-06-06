@@ -212,7 +212,7 @@ class Filter : public Iterator {
 
         RC getNextTuple(void *data);// {return QE_EOF;};
         // For attribute in vector<Attribute>, name it as rel.attr
-        void getAttributes(vector<Attribute> &attrs) const;//{};
+        void getAttributes(vector<Attribute> &attrs) const; //{};
     private:
         Iterator* iter = NULL;
         Condition cond;
@@ -257,7 +257,7 @@ class INLJoin : public Iterator {
 
         RC getNextTuple(void *data);//{return QE_EOF;};
         // For attribute in vector<Attribute>, name it as rel.attr
-        void getAttributes(vector<Attribute> &attrs) const;//{};
+        void getAttributes(vector<Attribute> &attrs) const; //{};
 
     private:
         Iterator* left;
