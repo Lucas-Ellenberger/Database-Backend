@@ -100,12 +100,12 @@ RC Filter::getNextTuple(void* data) {
                 if (compare_attr.type == TypeInt) {
                     int32_t recordInt;
                     memcpy(&recordInt, (char*)cur_data + recordSize, INT_SIZE);
-                    valid = checkScanCondition(recordInt, cond.op, value);
+                    valid = checkScanCondition(recordInt, cond.op, cond.rhsValue);
                 }
                 else if (compare_attr.type == TypeReal) {
                     float recordReal;
                     memcpy(&recordReal, (char*)cur_data + recordSize, REAL_SIZE);
-                    valid = checkScanCondition(recordReal, cond.op, value);
+                    valid = checkScanCondition(recordReal, cond.op, cond.rhsValue);
                 }
                 else {
                     // varchar case
@@ -115,7 +115,7 @@ RC Filter::getNextTuple(void* data) {
                     memcpy(recordString, (char*)cur_data + recordSize + VARCHAR_LENGTH_SIZE, varcharSize);
                     recordString[varcharSize] = '\0';
 
-                    valid = checkScanCondition(recordString, compOp, value);
+                    valid = checkScanCondition(recordString, cond.op, cond.rhsValue);
                 }
             }
             // Skip null fields
@@ -154,7 +154,7 @@ RC Filter::getNextTuple(void* data) {
 
 }
 
-void Filter::getAttributes(vector<Attribute> &attrs) {
+void Filter::getAttributes(vector<Attribute> &attrs) const {
     // im not sure which attributes im getting
     // its either those of the table that im iterating over
     // or its the attributes that im returning when i return each tuple
@@ -303,7 +303,7 @@ RC Project::getNextTuple(void* data) {
     return rc;
 }
 
-void Project::getAttributes(vector<Attribute> &attrs) {
+void Project::getAttributes(vector<Attribute> &attrs) const {
     // im not sure which attributes im getting
     // its either those of the table that im iterating over
     // or its the attributes that im returning when i return each tuple
@@ -387,7 +387,7 @@ RC INLJoin::getNextTuple(void *data) {
     void* inner_page_data = malloc(PAGE_SIZE);
     // we do not want to get a new tuple from left each time we call get next tuple, only when we reach EOF of inner loop
     if (newLeft) {
-        outer_rc = left.getNextTuple(outer_page_data);
+        outer_rc = left->getNextTuple(outer_page_data);
         if (outer_rc == QE_EOF) {
             free(inner_page_data);
             return outer_rc;
@@ -398,7 +398,7 @@ RC INLJoin::getNextTuple(void *data) {
         }
     }
 
-    while ((inner_rc = right.getNextTuple(inner_page_data)) == SUCCESS) {
+    while ((inner_rc = right->getNextTuple(inner_page_data)) == SUCCESS) {
         // do comparison
 
 
@@ -455,11 +455,11 @@ RC INLJoin::getNextTuple(void *data) {
         switch (left_attrs[left_attr_comp_index].type)
         {
             case TypeInt:
-                if (*right_comp_data == *left_comp_data)
+                if (*((int*)right_comp_data) == *((int*)left_comp_data))
                     equal = true;
             break;
             case TypeReal:
-                if (*right_comp_data == *left_comp_data)
+                if (*((float*)right_comp_data) == *((float*)left_comp_data))
                     equal = true;
             break;
             case TypeVarChar:
@@ -505,7 +505,7 @@ RC INLJoin::getNextTuple(void *data) {
 
         unsigned inner_size = getRecordSize(right->attrs, inner_page_data);
         unsigned outer_size = getRecordSize(left->attrs, outer_page_data);
-        if (inner_size + outer_size => 4096) {
+        if ((inner_size + outer_size) >= 4096) {
             return JOIN_RSLT_TOO_BIG;
         }
         memcpy(data, outer_page_data, outer_size);
@@ -514,8 +514,8 @@ RC INLJoin::getNextTuple(void *data) {
         free(left_comp_data);
     }
     if (inner_rc == QE_EOF) {
-        inner_rc.setIterator(NULL, NULL, true, true);
-        outer_rc = left.getNextTuple(outer_page_data); // can either do this OR can set newLeft = true
+        right->setIterator(NULL, NULL, true, true);
+        outer_rc = left->getNextTuple(outer_page_data); // can either do this OR can set newLeft = true
         if (outer_rc == QE_EOF) {
             free(inner_page_data);
             return outer_rc;
@@ -529,7 +529,7 @@ RC INLJoin::getNextTuple(void *data) {
     return getNextTuple(data);
 }
 
-void getAttributes(vector<Attribute> &attrs) const {
+void INLJoin::getAttributes(vector<Attribute> &attrs) const {
     attrs = total_attrs;
 }
 
@@ -586,14 +586,14 @@ int INLJoin::getAttributeOffset(void* data, bool left) {
     
     if(left) {
         attr_index = left_attr_comp_index;
-        int nullIndicatorSize = getNullIndicatorSize(left_attrs.size())
+        int nullIndicatorSize = getNullIndicatorSize(left_attrs.size());
         offset += nullIndicatorSize;
         nullIndicator = (char*)calloc(nullIndicatorSize, 1);
         memcpy(nullIndicator, data, nullIndicatorSize);
     }
     else {
         attr_index = right_attr_comp_index;
-        int nullIndicatorSize = getNullIndicatorSize(right_attrs.size())
+        int nullIndicatorSize = getNullIndicatorSize(right_attrs.size());
         offset += nullIndicatorSize;
         nullIndicator = (char*)calloc(nullIndicatorSize, 1);
         memcpy(nullIndicator, data, nullIndicatorSize);

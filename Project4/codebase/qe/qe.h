@@ -2,6 +2,9 @@
 #define _qe_h_
 
 #include <vector>
+#include <cstring>
+#include <string>
+#include <cmath>
 
 #include "../rbf/rbfm.h"
 #include "../rm/rm.h"
@@ -205,17 +208,21 @@ class Filter : public Iterator {
         Filter(Iterator *input,               // Iterator of input R
                const Condition &condition     // Selection condition
         );
-        ~Filter(){};
+        ~Filter();//{};
 
-        RC getNextTuple(void *data) {return QE_EOF;};
+        RC getNextTuple(void *data);// {return QE_EOF;};
         // For attribute in vector<Attribute>, name it as rel.attr
-        void getAttributes(vector<Attribute> &attrs) const{};
+        void getAttributes(vector<Attribute> &attrs) const;//{};
     private:
         Iterator* iter = NULL;
         Condition cond;
         Attribute compare_attr;
         int compare_attr_index;
-
+        int getNullIndicatorSize(int fieldCount);
+        bool fieldIsNull(char *nullIndicator, int i);
+        bool checkScanCondition(int recordInt, CompOp compOp, const void *value);
+        bool checkScanCondition(float recordReal, CompOp compOp, const void *value);
+        bool checkScanCondition(char *recordString, CompOp compOp, const void *value);
 };
 
 
@@ -223,16 +230,19 @@ class Project : public Iterator {
     // Projection operator
     public:
         Project(Iterator *input,                    // Iterator of input R
-              const vector<string> &attrNames){};   // vector containing attribute names
+              const vector<string> &attrNames);//{};   // vector containing attribute names
         ~Project(){};
 
-        RC getNextTuple(void *data) {return QE_EOF;};
+        RC getNextTuple(void *data);// {return QE_EOF;};
         // For attribute in vector<Attribute>, name it as rel.attr
-        void getAttributes(vector<Attribute> &attrs) const{};
+        void getAttributes(vector<Attribute> &attrs) const; //{};
     private:
         Iterator* iter = NULL;
         const vector<string> names;
         vector<Attribute> projection_attributes;
+        int getNullIndicatorSize(int fieldCount);
+        bool fieldIsNull(char *nullIndicator, int i);
+        RC setFieldToNull(char *nullIndicator, int i);
 };
 
 
@@ -242,12 +252,12 @@ class INLJoin : public Iterator {
         INLJoin(Iterator *leftIn,           // Iterator of input R
                IndexScan *rightIn,          // IndexScan Iterator of input S
                const Condition &condition   // Join condition
-        ){};
+        );//{};
         ~INLJoin(){};
 
-        RC getNextTuple(void *data){return QE_EOF;};
+        RC getNextTuple(void *data);//{return QE_EOF;};
         // For attribute in vector<Attribute>, name it as rel.attr
-        void getAttributes(vector<Attribute> &attrs) const{};
+        void getAttributes(vector<Attribute> &attrs) const;//{};
 
     private:
         Iterator* left;
@@ -260,6 +270,10 @@ class INLJoin : public Iterator {
         int left_attr_comp_index;
         int right_attr_comp_index;
         const vector<Attribute> total_attrs;
+        int getNullIndicatorSize(int fieldCount);
+        unsigned getRecordSize(const vector<Attribute> &recordDescriptor, const void *data);
+        int getAttributeOffset(void* data, bool left);
+        bool fieldIsNull(char *nullIndicator, int i);
 };
 
 
