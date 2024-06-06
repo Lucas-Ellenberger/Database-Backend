@@ -1141,7 +1141,7 @@ RC RelationManager::indexScan(const string &tableName,
 }
 
 // Let ix do all the work
-RC RM_IndexScanIterator::getNextTuple(RID &rid, void *key)
+RC RM_IndexScanIterator::getNextEntry(RID &rid, void *key)
 {
     return ix_iter.getNextEntry(rid, key);
 }
