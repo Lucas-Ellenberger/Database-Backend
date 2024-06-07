@@ -476,11 +476,11 @@ RC INLJoin::getNextTuple(void *data) {
         switch (left_attrs[left_attr_comp_index].type)
         {
             case TypeInt:
-                if (*right_comp_data == *left_comp_data)
+                if (*((int*)right_comp_data) == *((int*)left_comp_data))
                     equal = true;
                 break;
             case TypeReal:
-                if (*right_comp_data == *left_comp_data)
+                if (*((float*)right_comp_data) == *((float*)left_comp_data))
                     equal = true;
                 break;
             case TypeVarChar:
