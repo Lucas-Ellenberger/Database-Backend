@@ -6,12 +6,13 @@
 
 #include "qe.h"
 
-Filter::Filter(Iterator* input, const Condition &condition) {
+Filter::Filter(Iterator* input, const Condition &condition) : iter(input), cond(condition) {
     // Iterator is just an iterator over some tuples, cannot use regular rbfm scan to do stuff, must
     // use this scan iterator since it may have some kinds of other conditions we are unaware of
     // Must use condition to re-implement a getNextTuple() function
     // Iterator class may either be an index scan or table scan, doesnt really matter
-    iter = input;
+    
+    /*iter = input;
     cond.lhsAttr = condition.lhsAttr;
     cond.op = condition.op;
     cond.bRhsIsAttr = condition.bRhsIsAttr;
@@ -20,7 +21,7 @@ Filter::Filter(Iterator* input, const Condition &condition) {
     }
     else {
         cond.rhsValue = condition.rhsValue;
-    }
+    }*/
 
     vector<Attribute> attributes;
     iter->getAttributes(attributes);
