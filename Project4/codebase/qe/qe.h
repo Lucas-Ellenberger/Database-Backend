@@ -241,7 +241,7 @@ class Project : public Iterator {
         void getAttributes(vector<Attribute> &attrs) const; //{};
     private:
         Iterator* iter = NULL;
-        const vector<string> names;
+        vector<string> names;
         vector<Attribute> projection_attributes;
         RC error;
 

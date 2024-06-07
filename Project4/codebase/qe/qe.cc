@@ -22,7 +22,8 @@ Filter::Filter(Iterator* input, const Condition &condition) {
         cond.rhsValue = condition.rhsValue;
     }
 
-    vector<Attribute> attributes = iter->attrs;
+    vector<Attribute> attributes;
+    iter->getAttributes(attributes);
     bool found_attr = false;
     int i;
     for (i = 0; i < (int) attributes.size(); i += 1) {
@@ -64,10 +65,11 @@ RC Filter::getNextTuple(void* data) {
     if (iter == NULL)
         return FILTER_NT_INIT;
 
-    //get the next tuple out of the iterator and do the comparison
+    // get the next tuple out of the iterator and do the comparison
     void* cur_data = calloc(PAGE_SIZE, 1);
     RC rc;
-    vector<Attribute> attributes = iter->attrs;
+    /* vector<Attribute> attributes; */
+    /* iter->getAttributes(attributes); */
     bool valid = false;
     while ((rc = iter->getNextTuple(cur_data)) == SUCCESS) {
         // TODO keep going until we have data that is valid for the 
@@ -106,12 +108,12 @@ RC Filter::getNextTuple(void* data) {
                 if (compare_attr.type == TypeInt) {
                     int32_t recordInt;
                     memcpy(&recordInt, (char*)cur_data + recordSize, INT_SIZE);
-                    valid = checkScanCondition(recordInt, cond.op, cond.rhsValue);
+                    valid = checkScanCondition(recordInt, cond.op, &(cond.rhsValue));
                 }
                 else if (compare_attr.type == TypeReal) {
                     float recordReal;
                     memcpy(&recordReal, (char*)cur_data + recordSize, REAL_SIZE);
-                    valid = checkScanCondition(recordReal, cond.op, cond.rhsValue);
+                    valid = checkScanCondition(recordReal, cond.op, &(cond.rhsValue));
                 }
                 else {
                     // varchar case
@@ -120,7 +122,8 @@ RC Filter::getNextTuple(void* data) {
                     char recordString[varcharSize + 1];
                     memcpy(recordString, (char*)cur_data + recordSize + VARCHAR_LENGTH_SIZE, varcharSize);
                     recordString[varcharSize] = '\0';
-                    valid = checkScanCondition(recordString, cond.op, cond.rhsValue);
+                    // TODO: Verify we want to pass a pointer to the rhsValue.
+                    valid = checkScanCondition(recordString, cond.op, &(cond.rhsValue));
                 }
             }
             // Skip null fields
@@ -161,11 +164,11 @@ RC Filter::getNextTuple(void* data) {
     }
 }
 
-void Filter::getAttributes(vector<Attribute> &attrs) {
+void Filter::getAttributes(vector<Attribute> &attrs) const {
     // im not sure which attributes im getting
     // its either those of the table that im iterating over
     // or its the attributes that im returning when i return each tuple
-    attrs = iter->attrs;
+    iter->getAttributes(attrs);
 }
 
 Project::Project(Iterator* input, const vector<string> &attrNames) {
@@ -174,20 +177,25 @@ Project::Project(Iterator* input, const vector<string> &attrNames) {
     // must use condition to re-implement a getNextTuple() function
     // iterator class may either be an index scan or table scan, doesnt really matter
     iter = input;
-    names = attrNames;
-    if(attrNames.size() > input->attrs.size()) {
+    names.clear();
+    for (unsigned i = 0; i < attrNames.size(); i++)
+        names.push_back(attrNames[i]);
+
+    vector<Attribute> attrs;
+    input->getAttributes(attrs);
+    if(attrNames.size() > attrs.size()) {
         error = PRJCT_BAD_ATTR_COND;
         return;
     }
   
     for (unsigned i = 0; i < attrNames.size(); i += 1) {
-        for (unsigned j = 0; j < input->attrs.size(); j += 1) {
-            if(attrNames[i].compare(input->attrs[j].name) == 0) {
+        for (unsigned j = 0; j < attrs.size(); j += 1) {
+            if (attrNames[i].compare(attrs[j].name) == 0) {
                 // the names match
                 Attribute attr;
-                attr.name = input->attrs.name;
-                attr.type = input->attrs.type;
-                attr.length = input->attrs.length;
+                attr.name = attrs[j].name;
+                attr.type = attrs[j].type;
+                attr.length = attrs[j].length;
                 projection_attributes.push_back(attr);
             }
         }
@@ -209,10 +217,12 @@ RC Project::getNextTuple(void* data) {
     //get the next tuple out of the iterator and do the comparison
     void* cur_data = calloc(PAGE_SIZE, 1);
     RC rc;
+    vector<Attribute> attrs;
+    iter->getAttributes(attrs);
     while ((rc = iter->getNextTuple(cur_data)) == SUCCESS) {
         // retrieve the tuple
         // let us assume we can return the data in the exact order it was given to us, and we only need to cut out data
-        int given_null_size = getNullIndicatorSize(iter->attrs.size());
+        int given_null_size = getNullIndicatorSize(attrs.size());
         int our_null_size = getNullIndicatorSize(projection_attributes.size());
         char* nullIndicator = (char*)calloc(given_null_size, 1);
         memcpy(nullIndicator, cur_data, given_null_size);
@@ -233,12 +243,12 @@ RC Project::getNextTuple(void* data) {
             for (unsigned i = 0; i < projection_attributes.size(); i += 1) {
                 int cur_field = 0;
                 int offset = given_null_size;
-                while(projection_attributes[i].name.compare(iter->attrs[cur_field].name) != 0) {
-                    iter->attrs[cur_field];
+                while(projection_attributes[i].name.compare(attrs[cur_field].name) != 0) {
+                    attrs[cur_field];
                     if (fieldIsNull(nullIndicator, cur_field))
                         continue;
 
-                    switch (iter->attrs[cur_field].type)
+                    switch (attrs[cur_field].type)
                     {
                         case TypeInt:
                             offset += INT_SIZE;
@@ -304,13 +314,13 @@ RC Project::getNextTuple(void* data) {
     return rc;
 }
 
-void Project::getAttributes(vector<Attribute> &attrs) {
+void Project::getAttributes(vector<Attribute> &attrs) const {
     // im not sure which attributes im getting
     // its either those of the table that im iterating over
     // or its the attributes that im returning when i return each tuple
     // I am assuming that the attributes I return here are the attributes that MY PROJECTION returns, 
     // NOT what I GET when I call getNextTuple() on the underlying iterator
-    return projection_attributes;
+    iter->getAttributes(attrs);
 }
 // ... the rest of your implementations go here
 
@@ -513,7 +523,9 @@ RC INLJoin::getNextTuple(void *data) {
         // that offset, but only the length of the data otherwise we might write
         // past the buffer of *data. We should add the lengths to ensure <4096
         unsigned inner_size = getRecordSize(right->attrs, inner_page_data);
-        unsigned outer_size = getRecordSize(left->attrs, outer_page_data);
+        vector<Attribute> left_attrs;
+        left->getAttributes(left_attrs);
+        unsigned outer_size = getRecordSize(left_attrs, outer_page_data);
         if ((inner_size + outer_size) >= 4096)
             return JOIN_RSLT_TOO_BIG;
 
