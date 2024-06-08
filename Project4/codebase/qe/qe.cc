@@ -6,12 +6,12 @@
 
 #include "qe.h"
 
-Filter::Filter(Iterator* input, const Condition &condition) {
+Filter::Filter(Iterator* input, const Condition &condition) : iter(input), cond(condition) {
     // Iterator is just an iterator over some tuples, cannot use regular rbfm scan to do stuff, must
     // use this scan iterator since it may have some kinds of other conditions we are unaware of
     // Must use condition to re-implement a getNextTuple() function
     // Iterator class may either be an index scan or table scan, doesnt really matter
-    iter = input;
+    /*iter = input;
     cond.lhsAttr = condition.lhsAttr;
     cond.op = condition.op;
     cond.bRhsIsAttr = condition.bRhsIsAttr;
@@ -20,7 +20,7 @@ Filter::Filter(Iterator* input, const Condition &condition) {
     }
     else {
         cond.rhsValue = condition.rhsValue;
-    }
+    }*/
 
     vector<Attribute> attributes;
     iter->getAttributes(attributes);
@@ -49,6 +49,8 @@ Filter::Filter(Iterator* input, const Condition &condition) {
     error = SUCCESS;
 }
 
+Filter::~Filter() {}
+
 int Filter::getNullIndicatorSize(int fieldCount) 
 {
     return int(ceil((double) fieldCount / CHAR_BIT));
@@ -68,8 +70,8 @@ RC Filter::getNextTuple(void* data) {
     // get the next tuple out of the iterator and do the comparison
     void* cur_data = calloc(PAGE_SIZE, 1);
     RC rc;
-    /* vector<Attribute> attributes; */
-    /* iter->getAttributes(attributes); */
+    vector<Attribute> attributes;
+    iter->getAttributes(attributes);
     bool valid = false;
     while ((rc = iter->getNextTuple(cur_data)) == SUCCESS) {
         // TODO keep going until we have data that is valid for the 
@@ -90,7 +92,7 @@ RC Filter::getNextTuple(void* data) {
         // if (cond.bRhsIsAttr || cond.rhsValue.type != attributes[i].type) {
         //     return FILTER_BAD_COND;
         // }
-        int nullIndicatorSize = getNullIndicatorSize(recordDescriptor.size());
+        int nullIndicatorSize = getNullIndicatorSize(attributes.size());
         char nullIndicator[nullIndicatorSize];
         memset(nullIndicator, 0, nullIndicatorSize);
         memcpy(nullIndicator, (char*) cur_data, nullIndicatorSize);
@@ -101,7 +103,7 @@ RC Filter::getNextTuple(void* data) {
         // unsigned size = sizeof (RecordLength) + (recordDescriptor.size()) * sizeof(ColumnOffset) + nullIndicatorSize;
         // count up size of the record (amount of bytes to copy into *data)
         // when we reach the index of the attribute to be compared, do the comparison
-        for (unsigned i = 0; i < recordDescriptor.size(); i += 1)
+        for (unsigned i = 0; i < attributes.size(); i += 1)
         {
             if (i == (unsigned) compare_attr_index) {
                 //then offset of the record is already what we need it to be
@@ -130,7 +132,7 @@ RC Filter::getNextTuple(void* data) {
             if (fieldIsNull(nullIndicator, i))
                 continue;
           
-            switch (recordDescriptor[i].type)
+            switch (attributes[i].type)
             {
                 case TypeInt:
                     // size += INT_SIZE;
@@ -476,11 +478,11 @@ RC INLJoin::getNextTuple(void *data) {
         switch (left_attrs[left_attr_comp_index].type)
         {
             case TypeInt:
-                if (*right_comp_data == *left_comp_data)
+                if (*((int*)right_comp_data) == *((int*)left_comp_data))
                     equal = true;
                 break;
             case TypeReal:
-                if (*right_comp_data == *left_comp_data)
+                if (*((float*)right_comp_data) == *((float*)left_comp_data))
                     equal = true;
                 break;
             case TypeVarChar:
