@@ -196,7 +196,6 @@ RC RelationManager::deleteTable(const string &tableName)
 RC RelationManager::createIndex(const string &tableName, const string &attributeName) {
     RC rc;
     bool exists;
-
     // we first need to check if the table with name tableName exists
     tableExists(exists, tableName);
     if (!exists) {
@@ -208,6 +207,7 @@ RC RelationManager::createIndex(const string &tableName, const string &attribute
     if (!exists) {
         return RM_ATTR_DN_EXIST;
     }
+
     IndexManager *ix = IndexManager::instance();
     // Create the index on the attribute
     string ix_name = getIndexName(tableName, attributeName);
@@ -219,7 +219,6 @@ RC RelationManager::createIndex(const string &tableName, const string &attribute
         return rc;
 
     //insert the index into the indexes table
-
     rc = insertIndexes(tableName, attributeName, ix_name);
     if (rc)
         return rc;
@@ -241,17 +240,14 @@ RC RelationManager::createIndex(const string &tableName, const string &attribute
         }
     }
 
-
     // Initialize scanIterator of table file
     RM_ScanIterator rmsi;
     vector<string> attribute = {attributeName};
     scan(tableName, attributeName, NO_OP, NULL, attribute, rmsi);
 
-
     // Populate index with existing records
     RID rid;
     void *data = malloc(PAGE_SIZE);
-
     while (rmsi.getNextTuple(rid, data) != RM_EOF) {
         rc = ix->insertEntry(ixfileHandle, attr, data, rid);
         if (rc) {
@@ -417,15 +413,16 @@ RC RelationManager::insertTuple(const string &tableName, const void *data, RID &
         return rc;
     }
 
+    // Need to get table-id first from Table catalog
     // If index exists, update it
-    vector<Attribute> indexedAttributes;
-    if (indexExists(tableName, indexedAttributes)) {
-        rc = updateIndexes(tableName, data, rid, recordDescriptor);  // This function needs to be implemented
+    vector<Attribute> recordDescriptor;
+    if (indexExists(tableName, recordDescriptor)) {
+        rc = updateIndexes(tableName, data, rid, recordDescriptor, true);  // This function needs to be implemented
         if (rc) {
             rbfm->closeFile(fileHandle);
             return rc;
         }
-
+    }
 
     rbfm->closeFile(fileHandle);
     return rc;
@@ -983,12 +980,15 @@ RC RelationManager::attributeExists(bool &exists, const string &tableName, const
     RC rc = getAttributes(tableName, attrs);
     if (rc)
         return rc;
+
     exists = false;
     for (uint32_t i = 0; i < attrs.size(); i += 1) {
         if (attrs[i].name == attr_name) {
             exists = true;
+            break;
         }
     }
+
     return SUCCESS;
 }
 
@@ -997,6 +997,38 @@ bool RelationManager::fileExists(const string& fileName) {
     return (stat(fileName.c_str(), &buffer) == 0);
 }
 
+RC RelationManager::updateIndexes(const string &tableName, const void *data, RID &rid, vector<Attribute> &recordDescriptor, bool isInsert)
+{
+    RC rc;
+    bool exists;
+    // we first need to check if the table with name tableName exists
+    tableExists(exists, tableName);
+    if (!exists)
+        return RM_TABLE_DN_EXIST;
+
+    string attributeName;
+    IndexManager *ix = IndexManager::instance();
+    for (int i = 0; i < recordDescriptor.size(); i++) {
+        attributeName = recordDescriptor[i].name;
+        //check if the attribute with name attributeName exists in the associated table with name tableName
+        attributeExists(exists, tableName, attributeName);
+        if (!exists)
+            continue;
+
+        // Create the index on the attribute
+        string ix_name = getIndexName(tableName, attributeName);
+        // check if the index already exists
+        if (!fileExists(ix_name))
+            return RM_TABLE_DN_EXIST;
+
+        // Open index file
+        IXFileHandle ixfileHandle;
+        if ((rc = ix->openFile(ix_name, ixfileHandle)))
+            return rc;
+
+        // Insert or delete RID;
+    }
+}
 
 void RelationManager::toAPI(const string &str, void *data)
 {
