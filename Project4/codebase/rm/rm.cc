@@ -202,7 +202,7 @@ RC RelationManager::createIndex(const string &tableName, const string &attribute
     if (!exists) {
         return RM_TABLE_DN_EXIST;
     }
-    
+
     //check if the attribute with name attributeName exists in the associated table with name tableName
     attributeExists(exists, tableName, attributeName);
     if (!exists) {
@@ -412,8 +412,22 @@ RC RelationManager::insertTuple(const string &tableName, const void *data, RID &
 
     // Let rbfm do all the work
     rc = rbfm->insertRecord(fileHandle, recordDescriptor, data, rid);
-    rbfm->closeFile(fileHandle);
+    if (rc) {
+        rbfm->closeFile(fileHandle);
+        return rc;
+    }
 
+    // Need to get table-id first from Table catalog
+    // If index exists, update it
+    if (indexExists(tableName)) {  // This function needs to be implemented
+        rc = updateIndexes(tableName, data, rid, recordDescriptor);  // This function needs to be implemented
+        if (rc) {
+            rbfm->closeFile(fileHandle);
+            return rc;
+        }
+
+
+    rbfm->closeFile(fileHandle);
     return rc;
 }
 
@@ -945,7 +959,7 @@ RC RelationManager::tableExists(bool &exists, const string &tableName)
     rc = rbfm->scan(fileHandle, tableDescriptor, TABLES_COL_TABLE_NAME, EQ_OP, value, projection, rbfm_si);
 
     RID rid;
-    void *data = malloc (1 + INT_SIZE);
+    void *data = malloc (PAGE_SIZE);
     if ((rc = rbfm_si.getNextRecord(rid, data)) == SUCCESS)
     {
         // Parse the system field from that table entry
