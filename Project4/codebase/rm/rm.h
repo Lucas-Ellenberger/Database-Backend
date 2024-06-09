@@ -206,6 +206,8 @@ private:
   RC tableExists(bool &exists, const string &tableName);
   RC attributeExists(bool &exists, const string &tableName, const string attr_name);
   bool fileExists(const string& fileName);
+  void getIndexedAttributes(const string &tableName, vector<string> &indexedAttributes);
+  bool indexExists(const string &tableName, vector<string> &indexedAttributes);
 };
 
 #endif
