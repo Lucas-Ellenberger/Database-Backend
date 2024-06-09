@@ -207,7 +207,10 @@ private:
   RC attributeExists(bool &exists, const string &tableName, const string attr_name);
   bool fileExists(const string& fileName);
   bool indexExists(const string &tableName, vector<Attribute> &recordDescriptor);
-  RC updateIndexes(const string &tableName, const void *data, RID &rid, vector<Attribute> &recordDescriptor, bool isInsert);
+  RC updateIndexes(const string &tableName, const void *data, RID &rid, vector<Attribute> &recordDescriptor,
+      vector<Attribute> &indexAttributes, bool isInsert);
+  bool fieldIsNull(char *nullIndicator, int i);
+  int getNullIndicatorSize(int fieldCount);
 };
 
 #endif

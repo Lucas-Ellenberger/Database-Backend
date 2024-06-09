@@ -3,6 +3,7 @@
 #include "../ix/ix.h"
 #include <algorithm>
 #include <cstring>
+#include <cmath>
 
 #include <sys/stat.h>
 
@@ -415,7 +416,6 @@ RC RelationManager::insertTuple(const string &tableName, const void *data, RID &
 
     // Need to get table-id first from Table catalog
     // If index exists, update it
-    vector<Attribute> recordDescriptor;
     if (indexExists(tableName, recordDescriptor)) {  // This function needs to be implemented
         rc = updateIndexes(tableName, data, rid, recordDescriptor, true);  // This function needs to be implemented
         if (rc) {
@@ -1011,7 +1011,9 @@ RC RelationManager::updateIndexes(const string &tableName, const void *data, RID
     string attributeName;
     IndexManager *ix = IndexManager::instance();
     IXFileHandle ixfileHandle;
+    void *key = malloc(PAGE_SIZE);
     for (int i = 0; i < indexAttributes.size(); i++) {
+        memset(key, 0, PAGE_SIZE);
         attributeName = recordDescriptor[i].name;
         //check if the attribute with name attributeName exists in the associated table with name tableName
         attributeExists(exists, tableName, attributeName);
@@ -1029,22 +1031,50 @@ RC RelationManager::updateIndexes(const string &tableName, const void *data, RID
             return rc;
 
         //TODO: Build KEY!!!
-        for (int j = 0; j < recordDescriptor.size(); j++) {
-            if (indexAttributes[i].name == recordDescriptor[j].name)
+        int numNullBytes = getNullIndicatorSize(recordDescriptor.size());
+        char nullIndicator[numNullBytes];
+        int offset = numNullBytes;
+        int j;
+        bool validKey = true;
+        for (j = 0; j < recordDescriptor.size(); j++) {
+            if (indexAttributes[i].name == recordDescriptor[j].name) {
+                if (fieldIsNull(nullIndicator, j))
+                    validKey = false;
+
+                if (recordDescriptor[j].type == TypeVarChar) {
+                    int len;
+                    memcpy(&len, (char *)data + offset, sizeof(int));
+                    memcpy(key, (char *)data + offset, sizeof(int) + len);
+                } else {
+                    memcpy(key, (char *)data + offset, sizeof(int));
+                }
+
                 break;
+            }
+
+            if (fieldIsNull(nullIndicator, j))
+                continue;
+
+            if (recordDescriptor[j].type == TypeVarChar) {
+                int len;
+                memcpy(&len, (char *)data + offset, sizeof(int));
+                offset += len + sizeof(int);
+            } else {
+                offset += sizeof(int);
+            }
         }
 
-        nullIndicator[getNullIndicatorSize(recordDescriptor.size())];
-        if (fieldIsNull(nullIndicator, j))
-            continue;
-
-        void *key = 
         // Insert or delete RID;
-        if (isInsert)
-            ix->insertEntry(ixfileHandle, recordDescriptor[i], key, rid);
-        else
-            ix->deleteEntry(ixfileHandle, recordDescriptor[i], key, rid);
+        if (validKey) {
+            if (isInsert)
+                ix->insertEntry(ixfileHandle, recordDescriptor[i], key, rid);
+            else
+                ix->deleteEntry(ixfileHandle, recordDescriptor[i], key, rid);
+        }
     }
+
+    free(key);
+    return SUCCESS;
 }
 
 int RelationManager::getNullIndicatorSize(int fieldCount) 
@@ -1052,7 +1082,7 @@ int RelationManager::getNullIndicatorSize(int fieldCount)
     return int(ceil((double) fieldCount / CHAR_BIT));
 }
 
-bool RelatrionManager::fieldIsNull(char *nullIndicator, int i)
+bool RelationManager::fieldIsNull(char *nullIndicator, int i)
 {
     int indicatorIndex = i / CHAR_BIT;
     int indicatorMask  = 1 << (CHAR_BIT - 1 - (i % CHAR_BIT));
