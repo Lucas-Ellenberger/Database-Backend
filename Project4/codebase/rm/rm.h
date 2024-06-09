@@ -208,6 +208,8 @@ private:
   bool fileExists(const string& fileName);
   void getIndexedAttributes(const string &tableName, vector<Attribute> &recordDescriptor, vector<string> &indexedAttributes);
   bool indexExists(const string &tableName, vector<Attribute> &recordDescriptor, vector<string> &indexedAttributes);
+  RC updateIndexes(const string &tableName, const void *data, RID &rid, vector<Attribute> &recordDescriptor, vector<Attribute> &indexAttributes, bool isInsert);
+
 };
 
 #endif
