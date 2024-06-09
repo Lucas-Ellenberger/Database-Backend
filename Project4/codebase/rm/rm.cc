@@ -416,14 +416,14 @@ RC RelationManager::insertTuple(const string &tableName, const void *data, RID &
 
     // Need to get table-id first from Table catalog
     // If index exists, update it
-    if (indexExists(tableName, recordDescriptor)) {  // This function needs to be implemented
-        rc = updateIndexes(tableName, data, rid, recordDescriptor, true);  // This function needs to be implemented
+    vector<Attribute> indexedAttributes;
+    if (indexExists(tableName, recordDescriptor, indexedAttributes)) {
+        rc = updateIndexes(tableName, data, rid, recordDescriptor, indexedAttributes, true);  // This function needs to be implemented
         if (rc) {
             rbfm->closeFile(fileHandle);
             return rc;
         }
     }
-
 
     rbfm->closeFile(fileHandle);
     return rc;
@@ -1260,3 +1260,47 @@ RC RM_IndexScanIterator::close()
     return SUCCESS;
 }
 
+void RelationManager::getIndexedAttributes(const string &tableName, vector<Attribute> &recordDescriptor, vector<Attribute> &indexedAttributes) {
+    RecordBasedFileManager *rbfm = RecordBasedFileManager::instance();
+    FileHandle fileHandle;
+    rc = rbfm->openFile(getFileName(INDEX_TABLE_NAME), fileHandle);
+    if (rc != SUCCESS) {
+        return;
+    }
+
+    int tableId = getTableID(tableName);
+
+    // Scans through indexes table by table-id
+    RM_ScanIterator rmsi;
+    vector<string> attrs = {"attribute-name"};
+    rbfm->scan(fileHandle, indexDescriptor, "table-id", EQ_OP, &tableId, attrs, rmsi);
+
+    
+    RID rid;
+    void *data = malloc(PAGE_SIZE);
+    while (rmsi.getNextRecord(rid, data) != RM_EOF) {
+        int offset = 1; // Offset for nullbyte
+        int nameLength;
+        memcpy(&nameLength, offset + (char *)data, sizeof(int));
+        offset += sizeof(int);
+        char attributeName[nameLength + 1];
+        memcpy(attributeName, offset + (char *)data, nameLength);
+        attributeName[nameLength] = '\0';
+
+        // If attribute name matches, we push to indexedAttributes
+        for (auto & attr : recordDescriptor) {
+            if (attr.name == attributeName) {
+                indexedAttributes.push_back(attr);
+            }
+        }
+    }
+
+    free(data);
+    rmsi.close();
+    rbfm->closeFile(fileHandle);
+}
+
+bool RelationManager::indexExists(const string &tableName, vector<Attribute> &recordDescriptor, vector<Attribute> &indexedAttributes) {
+    getIndexedAttributes(tableName, recordDescriptor, indexedAttributes); 
+    return !indexedAttributes.empty();
+}

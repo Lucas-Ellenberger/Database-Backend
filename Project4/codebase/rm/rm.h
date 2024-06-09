@@ -211,6 +211,8 @@ private:
       vector<Attribute> &indexAttributes, bool isInsert);
   bool fieldIsNull(char *nullIndicator, int i);
   int getNullIndicatorSize(int fieldCount);
+  void getIndexedAttributes(const string &tableName, vector<Attribute> &recordDescriptor, vector<string> &indexedAttributes);
+  bool indexExists(const string &tableName, vector<Attribute> &recordDescriptor, vector<string> &indexedAttributes);
 };
 
 #endif
