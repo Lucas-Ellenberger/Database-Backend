@@ -997,7 +997,8 @@ bool RelationManager::fileExists(const string& fileName) {
     return (stat(fileName.c_str(), &buffer) == 0);
 }
 
-RC RelationManager::updateIndexes(const string &tableName, const void *data, RID &rid, vector<Attribute> &recordDescriptor, bool isInsert)
+RC RelationManager::updateIndexes(const string &tableName, const void *data, RID &rid, vector<Attribute> &recordDescriptor,
+        vector<Attribute> &indexAttributes, bool isInsert)
 {
     RC rc;
     bool exists;
@@ -1008,12 +1009,13 @@ RC RelationManager::updateIndexes(const string &tableName, const void *data, RID
 
     string attributeName;
     IndexManager *ix = IndexManager::instance();
-    for (int i = 0; i < recordDescriptor.size(); i++) {
+    IXFileHandle ixfileHandle;
+    for (int i = 0; i < indexAttributes.size(); i++) {
         attributeName = recordDescriptor[i].name;
         //check if the attribute with name attributeName exists in the associated table with name tableName
         attributeExists(exists, tableName, attributeName);
         if (!exists)
-            continue;
+            return RM_ATTR_DN_EXIST;
 
         // Create the index on the attribute
         string ix_name = getIndexName(tableName, attributeName);
@@ -1022,12 +1024,38 @@ RC RelationManager::updateIndexes(const string &tableName, const void *data, RID
             return RM_TABLE_DN_EXIST;
 
         // Open index file
-        IXFileHandle ixfileHandle;
         if ((rc = ix->openFile(ix_name, ixfileHandle)))
             return rc;
 
+        //TODO: Build KEY!!!
+        for (int j = 0; j < recordDescriptor.size(); j++) {
+            if (indexAttributes[i].name == recordDescriptor[j].name)
+                break;
+        }
+
+        nullIndicator[getNullIndicatorSize(recordDescriptor.size())];
+        if (fieldIsNull(nullIndicator, j))
+            continue;
+
+        void *key = 
         // Insert or delete RID;
+        if (isInsert)
+            ix->insertEntry(ixfileHandle, recordDescriptor[i], key, rid);
+        else
+            ix->deleteEntry(ixfileHandle, recordDescriptor[i], key, rid);
     }
+}
+
+int RelationManager::getNullIndicatorSize(int fieldCount) 
+{
+    return int(ceil((double) fieldCount / CHAR_BIT));
+}
+
+bool RelatrionManager::fieldIsNull(char *nullIndicator, int i)
+{
+    int indicatorIndex = i / CHAR_BIT;
+    int indicatorMask  = 1 << (CHAR_BIT - 1 - (i % CHAR_BIT));
+    return (nullIndicator[indicatorIndex] & indicatorMask) != 0;
 }
 
 void RelationManager::toAPI(const string &str, void *data)
