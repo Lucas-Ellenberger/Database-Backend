@@ -1063,7 +1063,7 @@ RC RelationManager::updateIndexes(const string &tableName, const void *data, RID
     void *key = malloc(PAGE_SIZE);
     for (int i = 0; i < indexAttributes.size(); i++) {
         memset(key, 0, PAGE_SIZE);
-        attributeName = recordDescriptor[i].name;
+        attributeName = indexAttributes[i].name;
         //check if the attribute with name attributeName exists in the associated table with name tableName
         attributeExists(exists, tableName, attributeName);
         if (!exists){
