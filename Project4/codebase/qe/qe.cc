@@ -382,6 +382,8 @@ INLJoin::INLJoin(Iterator *leftIn,           // Iterator of input R
     right_attrs = rightIn->attrs;
     newLeft = true;
     outer_page_data = malloc(PAGE_SIZE);
+    right_attr_comp_index = NULL;
+    left_attr_comp_index = NULL;
     //check to make sure that the two conditional attrs for inner and outer are both ,
     // as well as record the indexes of each of these attrs
     bool attr_exists = false;
