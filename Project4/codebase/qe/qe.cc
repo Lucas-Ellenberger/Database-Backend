@@ -110,12 +110,15 @@ RC Filter::getNextTuple(void* data) {
                 if (compare_attr.type == TypeInt) {
                     int32_t recordInt;
                     memcpy(&recordInt, (char*)cur_data + recordSize, INT_SIZE);
-                    valid = checkScanCondition(recordInt, cond.op, &(cond.rhsValue));
+                    cerr << "cond.rhsValue: " << *(int *)cond.rhsValue.data << endl;
+                    valid = checkScanCondition(recordInt, cond.op, cond.rhsValue.data);
+                    cerr << "int case set the valid flag to: " << valid << endl;
                 }
                 else if (compare_attr.type == TypeReal) {
                     float recordReal;
                     memcpy(&recordReal, (char*)cur_data + recordSize, REAL_SIZE);
-                    valid = checkScanCondition(recordReal, cond.op, &(cond.rhsValue));
+                    valid = checkScanCondition(recordReal, cond.op, cond.rhsValue.data);
+                    cerr << "float case set the valid flag to: " << valid << endl;
                 }
                 else {
                     // varchar case
@@ -125,12 +128,15 @@ RC Filter::getNextTuple(void* data) {
                     memcpy(recordString, (char*)cur_data + recordSize + VARCHAR_LENGTH_SIZE, varcharSize);
                     recordString[varcharSize] = '\0';
                     // TODO: Verify we want to pass a pointer to the rhsValue.
-                    valid = checkScanCondition(recordString, cond.op, &(cond.rhsValue));
+                    valid = checkScanCondition(recordString, cond.op, cond.rhsValue.data);
+                    cerr << "varchar case set the valid flag to: " << valid << endl;
                 }
             }
             // Skip null fields
-            if (fieldIsNull(nullIndicator, i))
+            if (fieldIsNull(nullIndicator, i)) {
+                cerr << "found null field." << endl;
                 continue;
+            }
           
             switch (attributes[i].type)
             {
@@ -153,8 +159,11 @@ RC Filter::getNextTuple(void* data) {
         }
 
         if (valid) {
+            cerr << "found a valid tuple!" << endl;
             memcpy(data, cur_data, recordSize);
             valid = false;
+        } else {
+            cerr << "found an invalid tuple!" << endl;
         }
     }
 
@@ -683,6 +692,7 @@ bool Filter::checkScanCondition(int recordInt, CompOp compOp, const void *value)
 {
     int32_t intValue;
     memcpy (&intValue, value, INT_SIZE);
+    cerr << "int scan cond found a value of: " << intValue << endl;
 
     switch (compOp)
     {
