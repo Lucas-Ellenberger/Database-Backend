@@ -297,6 +297,8 @@ RC Project::getNextTuple(void* data) {
                     continue;
                 }
 
+                if (cur_field >= projection_attributes.size())
+                    cur_field = projection_attributes.size() - 1;
                 switch (projection_attributes[cur_field].type)
                 {
                     case TypeInt:
