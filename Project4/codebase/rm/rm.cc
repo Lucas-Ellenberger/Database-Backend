@@ -1017,19 +1017,22 @@ RC RelationManager::updateIndexes(const string &tableName, const void *data, RID
         attributeName = recordDescriptor[i].name;
         //check if the attribute with name attributeName exists in the associated table with name tableName
         attributeExists(exists, tableName, attributeName);
-        if (!exists)
+        if (!exists){
+            free(key);
             return RM_ATTR_DN_EXIST;
-
+        }
         // Create the index on the attribute
         string ix_name = getIndexName(tableName, attributeName);
         // check if the index already exists
-        if (!fileExists(ix_name))
+        if (!fileExists(ix_name)){
+            free(key);
             return RM_TABLE_DN_EXIST;
-
+        }
         // Open index file
-        if ((rc = ix->openFile(ix_name, ixfileHandle)))
+        if ((rc = ix->openFile(ix_name, ixfileHandle))) {
+            free(key);
             return rc;
-
+    }
         //TODO: Build KEY!!!
         int numNullBytes = getNullIndicatorSize(recordDescriptor.size());
         char nullIndicator[numNullBytes];
@@ -1263,22 +1266,26 @@ RC RM_IndexScanIterator::close()
 void RelationManager::getIndexedAttributes(const string &tableName, vector<Attribute> &recordDescriptor, vector<Attribute> &indexedAttributes) {
     RecordBasedFileManager *rbfm = RecordBasedFileManager::instance();
     FileHandle fileHandle;
-    rc = rbfm->openFile(getFileName(INDEX_TABLE_NAME), fileHandle);
+    RC rc = rbfm->openFile(getFileName(INDEX_TABLE_NAME), fileHandle);
     if (rc != SUCCESS) {
         return;
     }
-
-    int tableId = getTableID(tableName);
+    int tableId;
+    rc = getTableID(tableName, tableId);
+    if (rc){
+        rbfm->closeFile(fileHandle);
+        return;
+    }
 
     // Scans through indexes table by table-id
-    RM_ScanIterator rmsi;
+    RBFM_ScanIterator rbfm_si;
     vector<string> attrs = {"attribute-name"};
-    rbfm->scan(fileHandle, indexDescriptor, "table-id", EQ_OP, &tableId, attrs, rmsi);
+    rbfm->scan(fileHandle, indexDescriptor, "table-id", EQ_OP, &tableId, attrs, rbfm_si);
 
     
     RID rid;
     void *data = malloc(PAGE_SIZE);
-    while (rmsi.getNextRecord(rid, data) != RM_EOF) {
+    while (rbfm_si.getNextRecord(rid, data) != RM_EOF) {
         int offset = 1; // Offset for nullbyte
         int nameLength;
         memcpy(&nameLength, offset + (char *)data, sizeof(int));
@@ -1296,7 +1303,7 @@ void RelationManager::getIndexedAttributes(const string &tableName, vector<Attri
     }
 
     free(data);
-    rmsi.close();
+    rbfm_si.close();
     rbfm->closeFile(fileHandle);
 }
 
