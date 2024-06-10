@@ -273,6 +273,22 @@ RC RelationManager::createIndex(const string &tableName, const string &attribute
             rmsi.close();
             return rc;
         }
+
+        int numNullBytes = 1;
+        char nullIndicator[numNullBytes];
+        memcpy(nullIndicator, keyValue, numNullBytes);
+        int offset = numNullBytes;
+        if (fieldIsNull(nullIndicator, 0))
+            continue;
+
+        if (attr.type == TypeVarChar) {
+            int len;
+            memcpy(&len, (char *)keyValue + offset, sizeof(int));
+            memmove(keyValue, (char *)keyValue + offset, sizeof(int) + len);
+        } else {
+            memmove(keyValue, (char *)keyValue + offset, sizeof(int));
+        }
+
         rc = ix->insertEntry(ixfileHandle, attr, keyValue, rid);
         if (rc) {
             free(data);
@@ -286,6 +302,8 @@ RC RelationManager::createIndex(const string &tableName, const string &attribute
     free(data);
     free(keyValue);
     rmsi.close();
+    cerr << "attr.type: " << attr.type << endl;
+    ix->printBtree(ixfileHandle, attr);
     ix->closeFile(ixfileHandle);
     rbfm->closeFile(tableFileHandle);
     return SUCCESS;
@@ -1084,7 +1102,6 @@ RC RelationManager::updateIndexes(const string &tableName, const void *data, RID
             return rc;
         }
 
-        //TODO: Build KEY!!!
         int numNullBytes = getNullIndicatorSize(recordDescriptor.size());
         char nullIndicator[numNullBytes];
         memcpy(nullIndicator, data, numNullBytes);
@@ -1122,15 +1139,27 @@ RC RelationManager::updateIndexes(const string &tableName, const void *data, RID
         // Insert or delete RID;
         if (validKey) {
             if (isInsert) {
-                rc = ix->insertEntry(ixfileHandle, recordDescriptor[i], key, rid);
-                if (rc)
+                /* cerr << "Tried to insertEntry for attributeName: " << indexAttributes[i].name << " and a key: " << *(int *)key << endl; */
+                rc = ix->insertEntry(ixfileHandle, indexAttributes[i], key, rid);
+                if (rc) {
+                    free(key);
                     return rc;
+                }
             }
             else {
-                rc = ix->deleteEntry(ixfileHandle, recordDescriptor[i], key, rid);
-                if (rc)
+                rc = ix->deleteEntry(ixfileHandle, indexAttributes[i], key, rid);
+                if (rc) {
+                    free(key);
                     return rc;
+                }
             }
+        }
+
+        /* ix->printBtree(ixfileHandle, indexAttributes[i]); */
+        rc = ix->closeFile(ixfileHandle);
+        if (rc) {
+            free(key);
+            return rc;
         }
     }
 
