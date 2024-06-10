@@ -66,6 +66,8 @@ bool Filter::fieldIsNull(char *nullIndicator, int i)
 RC Filter::getNextTuple(void* data) {
     if (iter == NULL)
         return FILTER_NT_INIT;
+    if (error)
+        return error;
 
     // get the next tuple out of the iterator and do the comparison
     void* cur_data = calloc(PAGE_SIZE, 1);
@@ -223,6 +225,8 @@ Project::Project(Iterator* input, const vector<string> &attrNames) {
 RC Project::getNextTuple(void* data) {
     if (iter == NULL)
         return PRJCT_NT_INIT;
+    if (error)
+        return error;
     
     //get the next tuple out of the iterator and do the comparison
     void* cur_data = calloc(PAGE_SIZE, 1);
@@ -407,6 +411,8 @@ INLJoin::INLJoin(Iterator *leftIn,           // Iterator of input R
 }
 
 RC INLJoin::getNextTuple(void *data) {
+    if (error)
+        return error;
     // start looping through left, loop through all of right, check condition
     // for each condition, concat the two and return it
     RC outer_rc;
