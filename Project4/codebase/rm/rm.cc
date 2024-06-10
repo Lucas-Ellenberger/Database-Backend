@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cstring>
 #include <cmath>
+#include <iostream>
 
 #include <sys/stat.h>
 
@@ -296,6 +297,7 @@ string RelationManager::getIndexName(const string &tableName, const string &attr
     // strcat(ret_val, "_");
     // strcat(ret_val, attributeName);
     string ret_val = table + attributeName;
+    cerr << "getIndexName: " << ret_val << endl;
     return ret_val;
 }
 
@@ -416,27 +418,34 @@ RC RelationManager::insertTuple(const string &tableName, const void *data, RID &
     // If this is a system table, we cannot modify it
     bool isSystem;
     rc = isSystemTable(isSystem, tableName);
-    if (rc)
+    if (rc) {
+        cerr << "first rc: " << rc << endl;
         return rc;
+    }
     if (isSystem)
         return RM_CANNOT_MOD_SYS_TBL;
 
     // Get recordDescriptor
     vector<Attribute> recordDescriptor;
     rc = getAttributes(tableName, recordDescriptor);
-    if (rc)
+    if (rc) {
+        cerr << "second rc: " << rc << endl;
         return rc;
+    }
 
     // And get fileHandle
     FileHandle fileHandle;
     rc = rbfm->openFile(getFileName(tableName), fileHandle);
-    if (rc)
+    if (rc) {
+        cerr << "third rc: " << rc << endl;
         return rc;
+    }
 
     // Let rbfm do all the work
     rc = rbfm->insertRecord(fileHandle, recordDescriptor, data, rid);
     if (rc) {
         rbfm->closeFile(fileHandle);
+        cerr << "fourth rc: " << rc << endl;
         return rc;
     }
 
@@ -447,11 +456,13 @@ RC RelationManager::insertTuple(const string &tableName, const void *data, RID &
         rc = updateIndexes(tableName, data, rid, recordDescriptor, indexedAttributes, true);  // This function needs to be implemented
         if (rc) {
             rbfm->closeFile(fileHandle);
+            cerr << "fifth rc: " << rc << endl;
             return rc;
         }
     }
 
     rbfm->closeFile(fileHandle);
+    cerr << "final rc: " << rc << endl;
     return rc;
 }
 
@@ -495,26 +506,36 @@ RC RelationManager::updateTuple(const string &tableName, const void *data, const
     // If this is a system table, we cannot modify it
     bool isSystem;
     rc = isSystemTable(isSystem, tableName);
-    if (rc)
+    if (rc) {
+        cerr << "update first rc: " << rc << endl;
         return rc;
-    if (isSystem)
+    }
+
+    if (isSystem) {
+        cerr << "update second rc: " << rc << endl;
         return RM_CANNOT_MOD_SYS_TBL;
+    }
 
     // Get recordDescriptor
     vector<Attribute> recordDescriptor;
     rc = getAttributes(tableName, recordDescriptor);
-    if (rc)
+    if (rc) {
+        cerr << "update third rc: " << rc << endl;
         return rc;
+    }
 
     // And get fileHandle
     FileHandle fileHandle;
     rc = rbfm->openFile(getFileName(tableName), fileHandle);
-    if (rc)
+    if (rc) {
+        cerr << "update fourth rc: " << rc << endl;
         return rc;
+    }
 
     // Let rbfm do all the work
     rc = rbfm->updateRecord(fileHandle, recordDescriptor, data, rid);
     rbfm->closeFile(fileHandle);
+    cerr << "update final rc: " << rc << endl;
 
     return rc;
 }
@@ -1031,8 +1052,10 @@ RC RelationManager::updateIndexes(const string &tableName, const void *data, RID
     bool exists;
     // we first need to check if the table with name tableName exists
     tableExists(exists, tableName);
-    if (!exists)
+    if (!exists) {
+        cerr << "can't find table in updateIndexes." << endl;
         return RM_TABLE_DN_EXIST;
+    }
 
     string attributeName;
     IndexManager *ix = IndexManager::instance();
@@ -1040,7 +1063,7 @@ RC RelationManager::updateIndexes(const string &tableName, const void *data, RID
     void *key = malloc(PAGE_SIZE);
     for (int i = 0; i < indexAttributes.size(); i++) {
         memset(key, 0, PAGE_SIZE);
-        attributeName = recordDescriptor[i].name;
+        attributeName = indexAttributes[i].name;
         //check if the attribute with name attributeName exists in the associated table with name tableName
         attributeExists(exists, tableName, attributeName);
         if (!exists){
@@ -1052,16 +1075,19 @@ RC RelationManager::updateIndexes(const string &tableName, const void *data, RID
         // check if the index already exists
         if (!fileExists(ix_name)){
             free(key);
+            cerr << "updateIndexes: cannot getIndexName!" << endl;
             return RM_TABLE_DN_EXIST;
         }
         // Open index file
         if ((rc = ix->openFile(ix_name, ixfileHandle))) {
             free(key);
             return rc;
+        }
     }
         //TODO: Build KEY!!!
         int numNullBytes = getNullIndicatorSize(recordDescriptor.size());
         char nullIndicator[numNullBytes];
+        memcpy(nullIndicator, data, numNullBytes);
         int offset = numNullBytes;
         int j;
         bool validKey = true;
@@ -1095,10 +1121,16 @@ RC RelationManager::updateIndexes(const string &tableName, const void *data, RID
 
         // Insert or delete RID;
         if (validKey) {
-            if (isInsert)
-                ix->insertEntry(ixfileHandle, recordDescriptor[i], key, rid);
-            else
-                ix->deleteEntry(ixfileHandle, recordDescriptor[i], key, rid);
+            if (isInsert) {
+                rc = ix->insertEntry(ixfileHandle, recordDescriptor[i], key, rid);
+                if (rc)
+                    return rc;
+            }
+            else {
+                rc = ix->deleteEntry(ixfileHandle, recordDescriptor[i], key, rid);
+                if (rc)
+                    return rc;
+            }
         }
     }
 
