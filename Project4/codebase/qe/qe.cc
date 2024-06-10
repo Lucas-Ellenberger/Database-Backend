@@ -164,14 +164,17 @@ RC Filter::getNextTuple(void* data) {
             /* cerr << "found a valid tuple!" << endl; */
             memcpy(data, cur_data, recordSize);
             valid = false;
+            free(cur_data);
             return SUCCESS;
         }
     }
 
     if (rc == QE_EOF) {
+        free(cur_data);
         return QE_EOF;
     }
     else {
+        free(cur_data);
         return rc;
     }
 }
@@ -327,6 +330,7 @@ RC Project::getNextTuple(void* data) {
         memcpy(data, nulls, our_null_size);
         free(nulls);
         free(cur_data);
+        free(nullIndicator);
         return SUCCESS;
     }
 
