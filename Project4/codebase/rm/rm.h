@@ -206,13 +206,12 @@ private:
   RC tableExists(bool &exists, const string &tableName);
   RC attributeExists(bool &exists, const string &tableName, const string attr_name);
   bool fileExists(const string& fileName);
-  bool indexExists(const string &tableName, vector<Attribute> &recordDescriptor);
   RC updateIndexes(const string &tableName, const void *data, RID &rid, vector<Attribute> &recordDescriptor,
       vector<Attribute> &indexAttributes, bool isInsert);
   bool fieldIsNull(char *nullIndicator, int i);
   int getNullIndicatorSize(int fieldCount);
-  void getIndexedAttributes(const string &tableName, vector<Attribute> &recordDescriptor, vector<string> &indexedAttributes);
-  bool indexExists(const string &tableName, vector<Attribute> &recordDescriptor, vector<string> &indexedAttributes);
+  void getIndexedAttributes(const string &tableName, vector<Attribute> &recordDescriptor, vector<Attribute> &indexedAttributes);
+  bool indexExists(const string &tableName, vector<Attribute> &recordDescriptor, vector<Attribute> &indexedAttributes);
 };
 
 #endif
