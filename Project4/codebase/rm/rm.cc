@@ -302,8 +302,8 @@ RC RelationManager::createIndex(const string &tableName, const string &attribute
     free(data);
     free(keyValue);
     rmsi.close();
-    cerr << "attr.type: " << attr.type << endl;
-    ix->printBtree(ixfileHandle, attr);
+    /* cerr << "attr.type: " << attr.type << endl; */
+    /* ix->printBtree(ixfileHandle, attr); */
     ix->closeFile(ixfileHandle);
     rbfm->closeFile(tableFileHandle);
     return SUCCESS;

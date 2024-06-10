@@ -223,10 +223,14 @@ Project::Project(Iterator* input, const vector<string> &attrNames) {
 }
 
 RC Project::getNextTuple(void* data) {
-    if (iter == NULL)
+    if (iter == NULL) {
+        /* cerr << "Project::getNextTuple: Not init!" << endl; */
         return PRJCT_NT_INIT;
-    if (error)
+    }
+    if (error) {
+        /* cerr << "Project::getNextTuple: error Initializing." << endl; */
         return error;
+    }
     
     //get the next tuple out of the iterator and do the comparison
     void* cur_data = calloc(PAGE_SIZE, 1);
@@ -322,6 +326,8 @@ RC Project::getNextTuple(void* data) {
         }
         memcpy(data, nulls, our_null_size);
         free(nulls);
+        free(cur_data);
+        return SUCCESS;
     }
 
     free(cur_data);
@@ -549,6 +555,7 @@ RC INLJoin::getNextTuple(void *data) {
         memcpy((char*)data + outer_size, inner_page_data, inner_size);
         free(right_comp_data);
         free(left_comp_data);
+        return SUCCESS;
     }
 
     if (inner_rc == QE_EOF) {
@@ -621,9 +628,9 @@ unsigned INLJoin::getRecordSize(const vector<Attribute> &recordDescriptor, const
 
 int INLJoin::getAttributeOffset(void* data, bool left) {
     int offset = 0;
-    int attr_index;
+    int attr_index = 1;
     char* nullIndicator = NULL;
-    if(left) {
+    if (left) {
         attr_index = left_attr_comp_index;
         int nullIndicatorSize = getNullIndicatorSize(left_attrs.size());
         offset += nullIndicatorSize;
@@ -639,6 +646,7 @@ int INLJoin::getAttributeOffset(void* data, bool left) {
     }
 
     if (left) {
+        /* cerr << "Left: attr_index: " << attr_index << endl; */
         for(int i = 0; i < attr_index; i += 1) {
             if (fieldIsNull(nullIndicator, i))
                 continue;
@@ -661,6 +669,8 @@ int INLJoin::getAttributeOffset(void* data, bool left) {
         }
     }
     else {
+        /* if ((attr_index != 2) && (attr_index != 0)) */
+        /* cerr << "Right: attr_index: " << attr_index << endl; */
         for(int i = 0; i < attr_index; i += 1) {
             if (fieldIsNull(nullIndicator, i))
                 continue;
