@@ -1,29 +1,56 @@
 1. Basic information
-Team number (e.g., 01) : 
-#1 Student ID : 
-#1 Student Name : 
-#2 Student ID : 
-#2 Student Name : 
-#3 Student ID : 
-#3 Student Name : 
+Team number (e.g., 01) : 42
+#1 Student ID : 1885381
+#1 Student Name : Bradley Haire
+#2 Student ID : 1865864
+#2 Student Name : Lucas Ellenberger
+#3 Student ID : 1849584
+#3 Student Name : Harrison Nou
 
 
 2. Catalog information about Index
 - Show what catalog information you store for an index. 
+    The catalog information, or more specifically the attributes, are defined by the createIndexDescriptor() function. 
+    The attributes it stores are the table-id of the table the index is on, the attribute name of the attribute the index is on,
+    and the name of the index file. The table-id allows us to find the attributes of the table, and the name of the table
+    whenever necessary, the attribute name is the distinct identifier of the attribute, meaning that we can prevent another index
+    being created on the same attribute, as well as find an index created on that attribute should it exist. The index file name 
+    is stored so that we can access the index file for any index scan, or find the index file given the table and attribute. 
 
 
 3. Index Nested Loop Join
 - Describe how your Index Nested Loop Join works.
+    INLJoin works by first storing both iterators and the condition as class variables upon initialization. 
+    We then check if there are bad conditions or bad values passed to us, such as the join attribute not existing in one or both of
+    the iterators. We also immediately compute the size of the expected joined record, ie the size of the tuple returned from the 
+    left iterator concatenated with the tuple returned from the right iterator. Lastly,  we also store the indices of the 
+    compared attributes in each respective vector of attributes for the left and right iterators. 
+    The getNextTuple() function works as such: we have a class variable called newLeft which tells us whether or not 
+    we need to get the next tuple from the outer iterator. If it is false, we continue getting new tuples from the inner scan. 
+    This value is only set to true when we run out of tuples in the inner iterator. When this happens, we also call setIterator()
+    on the inner scan, which should reset the inner iterator back to the start of the scan. For each tuple from the inner scan, 
+    we will loop through each attribute, adding the size of the record continually until we run out of attributes. While we are 
+    looping through, eventually we will come to the index of the compared value. We will then grab that attribute specifically 
+    (from the right iterator) and compare it with the comparison value of the left tuple. We store the entire left tuple, and 
+    upon reaching the inner scan's comparison attribute, we will grab the values of both attributes and call our comparison function. 
+    This will set a boolean which, before we join and return the tuple (but after we have gathered the size of the inner tuple), 
+    will be checked to see if it is true. If it is, then we will concatenate the tuples and return the joined tuple, if not, we 
+    move onto the next tuple from the inner scan. As described earlier, upon hitting EOF from the inner scan, we will grab a new 
+    outer tuple, set the value that stores this record to the new value, reset the inner scan, and then we will start again grabbing
+    values from the inner scan and comparing them. This is continued until a match is found, where it is returned, or until we hit
+    EOF from the outer scan. 
 
 
 4. Implementation Detail
 - Have you added your own source file (.cc or .h)?
-
+    No.
 - Have you implemented any features not described in the Project4 pdf? If so, describe them here.
-
+    No.
 - Implementation details to help us understand and grade your code:
-
+    I believe the only important piece of information is the naming scheme for the index files. 
+    The naming scheme is TableName underscore AttributeName. For an index on attribute Salary of table Employees, it would appear as
+    "Employees_Salary" (without the quotes).
 
 5. Other (optional)
 - Freely use this section to tell us about things that are related to the project 4, but not related to the other sections (optional)
-
+    N/A
