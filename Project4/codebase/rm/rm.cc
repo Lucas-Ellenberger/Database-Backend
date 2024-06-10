@@ -262,7 +262,7 @@ RC RelationManager::createIndex(const string &tableName, const string &attribute
 
     // Populate index with existing records
     RID rid;
-    void *keyValue = malloc(attr.length);
+    void *keyValue = malloc(PAGE_SIZE);
     void *data = malloc(PAGE_SIZE);
     while (rmsi.getNextTuple(rid, data) != RM_EOF) {
         if ((rc = rbfm->readAttribute(tableFileHandle, attrs, rid, attributeName, keyValue)) != SUCCESS) {
@@ -297,7 +297,7 @@ string RelationManager::getIndexName(const string &tableName, const string &attr
     // strcat(ret_val, "_");
     // strcat(ret_val, attributeName);
     string ret_val = table + attributeName;
-    cerr << "getIndexName: " << ret_val << endl;
+    /* cerr << "getIndexName: " << ret_val << endl; */
     return ret_val;
 }
 
@@ -419,7 +419,7 @@ RC RelationManager::insertTuple(const string &tableName, const void *data, RID &
     bool isSystem;
     rc = isSystemTable(isSystem, tableName);
     if (rc) {
-        cerr << "first rc: " << rc << endl;
+        /* cerr << "first rc: " << rc << endl; */
         return rc;
     }
     if (isSystem)
@@ -429,7 +429,7 @@ RC RelationManager::insertTuple(const string &tableName, const void *data, RID &
     vector<Attribute> recordDescriptor;
     rc = getAttributes(tableName, recordDescriptor);
     if (rc) {
-        cerr << "second rc: " << rc << endl;
+        /* cerr << "second rc: " << rc << endl; */
         return rc;
     }
 
@@ -437,7 +437,7 @@ RC RelationManager::insertTuple(const string &tableName, const void *data, RID &
     FileHandle fileHandle;
     rc = rbfm->openFile(getFileName(tableName), fileHandle);
     if (rc) {
-        cerr << "third rc: " << rc << endl;
+        /* cerr << "third rc: " << rc << endl; */
         return rc;
     }
 
@@ -445,7 +445,7 @@ RC RelationManager::insertTuple(const string &tableName, const void *data, RID &
     rc = rbfm->insertRecord(fileHandle, recordDescriptor, data, rid);
     if (rc) {
         rbfm->closeFile(fileHandle);
-        cerr << "fourth rc: " << rc << endl;
+        /* cerr << "fourth rc: " << rc << endl; */
         return rc;
     }
 
@@ -456,13 +456,13 @@ RC RelationManager::insertTuple(const string &tableName, const void *data, RID &
         rc = updateIndexes(tableName, data, rid, recordDescriptor, indexedAttributes, true);  // This function needs to be implemented
         if (rc) {
             rbfm->closeFile(fileHandle);
-            cerr << "fifth rc: " << rc << endl;
+            /* cerr << "fifth rc: " << rc << endl; */
             return rc;
         }
     }
 
     rbfm->closeFile(fileHandle);
-    cerr << "final rc: " << rc << endl;
+    /* cerr << "final rc: " << rc << endl; */
     return rc;
 }
 
@@ -507,12 +507,12 @@ RC RelationManager::updateTuple(const string &tableName, const void *data, const
     bool isSystem;
     rc = isSystemTable(isSystem, tableName);
     if (rc) {
-        cerr << "update first rc: " << rc << endl;
+        /* cerr << "update first rc: " << rc << endl; */
         return rc;
     }
 
     if (isSystem) {
-        cerr << "update second rc: " << rc << endl;
+        /* cerr << "update second rc: " << rc << endl; */
         return RM_CANNOT_MOD_SYS_TBL;
     }
 
@@ -520,7 +520,7 @@ RC RelationManager::updateTuple(const string &tableName, const void *data, const
     vector<Attribute> recordDescriptor;
     rc = getAttributes(tableName, recordDescriptor);
     if (rc) {
-        cerr << "update third rc: " << rc << endl;
+        /* cerr << "update third rc: " << rc << endl; */
         return rc;
     }
 
@@ -528,14 +528,14 @@ RC RelationManager::updateTuple(const string &tableName, const void *data, const
     FileHandle fileHandle;
     rc = rbfm->openFile(getFileName(tableName), fileHandle);
     if (rc) {
-        cerr << "update fourth rc: " << rc << endl;
+        /* cerr << "update fourth rc: " << rc << endl; */
         return rc;
     }
 
     // Let rbfm do all the work
     rc = rbfm->updateRecord(fileHandle, recordDescriptor, data, rid);
     rbfm->closeFile(fileHandle);
-    cerr << "update final rc: " << rc << endl;
+    /* cerr << "update final rc: " << rc << endl; */
 
     return rc;
 }
@@ -1053,7 +1053,7 @@ RC RelationManager::updateIndexes(const string &tableName, const void *data, RID
     // we first need to check if the table with name tableName exists
     tableExists(exists, tableName);
     if (!exists) {
-        cerr << "can't find table in updateIndexes." << endl;
+        /* cerr << "can't find table in updateIndexes." << endl; */
         return RM_TABLE_DN_EXIST;
     }
 
@@ -1075,7 +1075,7 @@ RC RelationManager::updateIndexes(const string &tableName, const void *data, RID
         // check if the index already exists
         if (!fileExists(ix_name)){
             free(key);
-            cerr << "updateIndexes: cannot getIndexName!" << endl;
+            /* cerr << "updateIndexes: cannot getIndexName!" << endl; */
             return RM_TABLE_DN_EXIST;
         }
         // Open index file
@@ -1083,7 +1083,7 @@ RC RelationManager::updateIndexes(const string &tableName, const void *data, RID
             free(key);
             return rc;
         }
-    }
+
         //TODO: Build KEY!!!
         int numNullBytes = getNullIndicatorSize(recordDescriptor.size());
         char nullIndicator[numNullBytes];
