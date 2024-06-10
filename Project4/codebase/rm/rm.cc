@@ -1307,7 +1307,7 @@ RC RelationManager::indexScan(const string &tableName,
 {
     // Open the file for the given tableName
     IndexManager *ix = IndexManager::instance();
-    RC rc = ix->openFile(getFileName(tableName), rm_IndexScanIterator.ixfileHandle);
+    RC rc = ix->openFile(getIndexName(tableName, attributeName), rm_IndexScanIterator.ixfileHandle);
     if (rc)
         return rc;
 
