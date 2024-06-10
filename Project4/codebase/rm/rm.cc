@@ -230,6 +230,15 @@ RC RelationManager::createIndex(const string &tableName, const string &attribute
         return rc;
     }
 
+
+    // Open table file to scan records
+    RecordBasedFileManager *rbfm = RecordBasedFileManager::instance();
+    FileHandle tableFileHandle;
+    if ((rc = rbfm->openFile(getFileName(tableName), tableFileHandle)) != SUCCESS) {
+        ix->closeFile(ixfileHandle);
+        return rc;
+    }
+
     // Gets info of the attribute to be indexed
     vector<Attribute> attrs;
     Attribute attr;
@@ -241,26 +250,43 @@ RC RelationManager::createIndex(const string &tableName, const string &attribute
         }
     }
 
-    // Initialize scanIterator of table file
+    // Initialize scanIterator of the table file
     RM_ScanIterator rmsi;
     vector<string> attribute = {attributeName};
-    scan(tableName, attributeName, NO_OP, NULL, attribute, rmsi);
+    if ((rc = scan(tableName, "", NO_OP, NULL, attribute, rmsi)) != SUCCESS) {
+        ix->closeFile(ixfileHandle);
+        rbfm->closeFile(tableFileHandle);
+        return rc;
+    }
 
     // Populate index with existing records
     RID rid;
+    void *keyValue = malloc(attr.length);
     void *data = malloc(PAGE_SIZE);
     while (rmsi.getNextTuple(rid, data) != RM_EOF) {
-        rc = ix->insertEntry(ixfileHandle, attr, data, rid);
+        if ((rc = rbfm->readAttribute(tableFileHandle, attrs, rid, attributeName, keyValue)) != SUCCESS) {
+            free(data);
+            free(keyValue);
+            ix->closeFile(ixfileHandle);
+            rbfm->closeFile(tableFileHandle);
+            rmsi.close();
+            return rc;
+        }
+        rc = ix->insertEntry(ixfileHandle, attr, keyValue, rid);
         if (rc) {
             free(data);
+            free(keyValue);
             ix->closeFile(ixfileHandle);
+            rmsi.close();
             return rc;
         }
     }
 
     free(data);
+    free(keyValue);
     rmsi.close();
     ix->closeFile(ixfileHandle);
+    rbfm->closeFile(tableFileHandle);
     return SUCCESS;
 }
 
