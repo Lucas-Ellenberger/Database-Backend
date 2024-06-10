@@ -1083,6 +1083,7 @@ RC RelationManager::updateIndexes(const string &tableName, const void *data, RID
             free(key);
             return rc;
         }
+    }
         //TODO: Build KEY!!!
         int numNullBytes = getNullIndicatorSize(recordDescriptor.size());
         char nullIndicator[numNullBytes];
