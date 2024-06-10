@@ -302,8 +302,8 @@ RC RelationManager::createIndex(const string &tableName, const string &attribute
     free(data);
     free(keyValue);
     rmsi.close();
-    cerr << "attr.type: " << attr.type << endl;
-    ix->printBtree(ixfileHandle, attr);
+    /* cerr << "attr.type: " << attr.type << endl; */
+    /* ix->printBtree(ixfileHandle, attr); */
     ix->closeFile(ixfileHandle);
     rbfm->closeFile(tableFileHandle);
     return SUCCESS;
@@ -1307,7 +1307,7 @@ RC RelationManager::indexScan(const string &tableName,
 {
     // Open the file for the given tableName
     IndexManager *ix = IndexManager::instance();
-    RC rc = ix->openFile(getFileName(tableName), rm_IndexScanIterator.ixfileHandle);
+    RC rc = ix->openFile(getIndexName(tableName, attributeName), rm_IndexScanIterator.ixfileHandle);
     if (rc)
         return rc;
 
